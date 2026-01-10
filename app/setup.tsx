@@ -1,6 +1,6 @@
 /**
- * Server Setup Instructions Screen
- * Complete guide for setting up relay server in Termux
+ * Server Setup Instructions
+ * Simple 3-step guide to setup relay server in Termux
  */
 
 import React from 'react';
@@ -11,13 +11,25 @@ import {
     ScrollView,
     TouchableOpacity,
     Linking,
+    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
 
 export default function ServerSetupScreen() {
-    const openTermuxPlayStore = () => {
-        Linking.openURL('https://f-droid.org/packages/com.termux/');
+    const SCRIPT_URL = 'https://raw.githubusercontent.com/awesomealexsye/paylap-fitness-node-server/main/termux-auto-setup.sh';
+    const TERMUX_URL = 'https://f-droid.org/packages/com.termux/';
+
+    const SETUP_COMMAND = `curl -O ${SCRIPT_URL} && bash termux-auto-setup.sh`;
+
+    const handleCopyCommand = async () => {
+        await Clipboard.setStringAsync(SETUP_COMMAND);
+        Alert.alert('✅ Copied!', 'Setup command copied to clipboard.\n\nPaste it in Termux to start installation.');
+    };
+
+    const handleOpenTermux = () => {
+        Linking.openURL(TERMUX_URL);
     };
 
     return (
@@ -31,9 +43,9 @@ export default function ServerSetupScreen() {
                     >
                         <Text style={styles.backText}>← Back</Text>
                     </TouchableOpacity>
-                    <Text style={styles.title}>Server Setup Guide</Text>
+                    <Text style={styles.title}>Relay Server Setup</Text>
                     <Text style={styles.subtitle}>
-                        Follow these steps to run the relay server on this device
+                        3 Simple Steps - Fully Automated!
                     </Text>
                 </View>
 
@@ -57,15 +69,15 @@ export default function ServerSetupScreen() {
                         Download and install Termux from F-Droid (NOT Google Play Store).
                     </Text>
                     <TouchableOpacity
-                        style={styles.linkButton}
-                        onPress={openTermuxPlayStore}
+                        style={styles.primaryButton}
+                        onPress={handleOpenTermux}
                     >
-                        <Text style={styles.linkButtonText}>
-                            🔗 Download Termux from F-Droid
+                        <Text style={styles.primaryButtonText}>
+                            📱 Download Termux from F-Droid
                         </Text>
                     </TouchableOpacity>
                     <Text style={styles.note}>
-                        Note: The Play Store version is outdated and won't work properly.
+                        ⚠️ The Play Store version is outdated and won't work.
                     </Text>
                 </View>
 
@@ -75,15 +87,26 @@ export default function ServerSetupScreen() {
                         <View style={styles.stepNumber}>
                             <Text style={styles.stepNumberText}>2</Text>
                         </View>
-                        <Text style={styles.stepTitle}>Transfer Server Files</Text>
+                        <Text style={styles.stepTitle}>Copy Setup Command</Text>
                     </View>
                     <Text style={styles.stepText}>
-                        Copy the `paylap-node-server` folder to this Android device. You can use:
+                        Tap the button below to copy the auto-setup command to clipboard.
                     </Text>
-                    <View style={styles.bulletList}>
-                        <Text style={styles.bullet}>• USB cable transfer</Text>
-                        <Text style={styles.bullet}>• Cloud storage (Google Drive, Dropbox)</Text>
-                        <Text style={styles.bullet}>• File sharing apps</Text>
+                    <TouchableOpacity
+                        style={styles.copyButton}
+                        onPress={handleCopyCommand}
+                    >
+                        <Text style={styles.copyButtonIcon}>📋</Text>
+                        <Text style={styles.copyButtonText}>Copy Setup Command</Text>
+                    </TouchableOpacity>
+                    <View style={styles.codeBlock}>
+                        <Text style={styles.codeComment}># This command will:</Text>
+                        <Text style={styles.codeComment}># • Download auto-setup script</Text>
+                        <Text style={styles.codeComment}># • Install Node.js & Git</Text>
+                        <Text style={styles.codeComment}># • Clone server from GitHub</Text>
+                        <Text style={styles.codeComment}># • Install dependencies</Text>
+                        <Text style={styles.codeComment}># • Start with PM2</Text>
+                        <Text style={styles.codeComment}># • Enable auto-start</Text>
                     </View>
                 </View>
 
@@ -93,41 +116,89 @@ export default function ServerSetupScreen() {
                         <View style={styles.stepNumber}>
                             <Text style={styles.stepNumberText}>3</Text>
                         </View>
-                        <Text style={styles.stepTitle}>Run Setup Script</Text>
+                        <Text style={styles.stepTitle}>Run in Termux</Text>
                     </View>
                     <Text style={styles.stepText}>
-                        Open Termux and run these commands:
+                        Open Termux and paste the command (long-press → Paste), then press Enter.
                     </Text>
-                    <View style={styles.codeBlock}>
-                        <Text style={styles.code}>cd /sdcard/paylap-node-server</Text>
-                        <Text style={styles.code}>bash setup-termux.sh</Text>
-                    </View>
-                    <Text style={styles.note}>
-                        The setup script will automatically:
-                    </Text>
-                    <View style={styles.bulletList}>
-                        <Text style={styles.bullet}>✅ Install Node.js</Text>
-                        <Text style={styles.bullet}>✅ Install dependencies</Text>
-                        <Text style={styles.bullet}>✅ Test relay connection</Text>
-                        <Text style={styles.bullet}>✅ Start server with PM2</Text>
-                        <Text style={styles.bullet}>✅ Enable auto-start on reboot</Text>
+                    <View style={styles.instructionBox}>
+                        <Text style={styles.instructionText}>
+                            1. Open <Text style={styles.bold}>Termux</Text> app
+                        </Text>
+                        <Text style={styles.instructionText}>
+                            2. <Text style={styles.bold}>Long-press</Text> on the screen
+                        </Text>
+                        <Text style={styles.instructionText}>
+                            3. Tap <Text style={styles.bold}>Paste</Text>
+                        </Text>
+                        <Text style={styles.instructionText}>
+                            4. Press <Text style={styles.bold}>Enter</Text>
+                        </Text>
+                        <Text style={styles.instructionText}>
+                            5. Wait for setup to complete (~2-3 minutes)
+                        </Text>
                     </View>
                 </View>
 
-                {/* Step 4 */}
+                {/* What Happens */}
                 <View style={styles.stepContainer}>
                     <View style={styles.stepHeader}>
-                        <View style={styles.stepNumber}>
-                            <Text style={styles.stepNumberText}>4</Text>
+                        <View style={styles.stepIcon}>
+                            <Text style={styles.stepIconText}>🤖</Text>
                         </View>
-                        <Text style={styles.stepTitle}>Verify Server is Running</Text>
+                        <Text style={styles.stepTitle}>Automatic Setup</Text>
                     </View>
+
                     <Text style={styles.stepText}>
-                        After setup completes, the server should start automatically on port 3000.
+                        The script will automatically:
                     </Text>
-                    <View style={styles.infoBox}>
-                        <Text style={styles.infoText}>
-                            💡 Return to the kiosk app and try scanning a face. If the server is running, you won't see this error anymore.
+
+                    <View style={styles.bulletList}>
+                        <Text style={styles.bullet}>✅ Update Termux packages</Text>
+                        <Text style={styles.bullet}>✅ Install Node.js & Git</Text>
+                        <Text style={styles.bullet}>✅ Clone server from GitHub</Text>
+                        <Text style={styles.bullet}>✅ Install all dependencies</Text>
+                        <Text style={styles.bullet}>✅ Start server on port 3000</Text>
+                        <Text style={styles.bullet}>✅ Setup PM2 for auto-restart</Text>
+                        <Text style={styles.bullet}>✅ Enable background running</Text>
+                        <Text style={styles.bullet}>✅ Configure auto-start on boot</Text>
+                    </View>
+
+                    <View style={styles.successBox}>
+                        <Text style={styles.successText}>
+                            🎉 When done, you'll see "Setup Complete!" and the server will be running!
+                        </Text>
+                    </View>
+                </View>
+
+                {/* Verify */}
+                <View style={styles.stepContainer}>
+                    <View style={styles.stepHeader}>
+                        <View style={styles.stepIcon}>
+                            <Text style={styles.stepIconText}>✅</Text>
+                        </View>
+                        <Text style={styles.stepTitle}>Verify Setup</Text>
+                    </View>
+
+                    <Text style={styles.stepText}>
+                        After setup completes, return to the kiosk app:
+                    </Text>
+
+                    <View style={styles.verifyList}>
+                        <Text style={styles.verifyItem}>
+                            1. Go to <Text style={styles.bold}>Settings ⚙️</Text>
+                        </Text>
+                        <Text style={styles.verifyItem}>
+                            2. Tap <Text style={styles.bold}>"Check"</Text> button
+                        </Text>
+                        <Text style={styles.verifyItem}>
+                            3. Should show <Text style={styles.successColor}>🟢 Online</Text>
+                        </Text>
+                        <Text style={styles.verifyItem}>
+                            4. Tap <Text style={styles.bold}>"Test Relay Hardware"</Text>
+                        </Text>
+                        <Text style={styles.verifyItem}>
+                            5. Door should unlock for 3 seconds!
                         </Text>
                     </View>
                 </View>
@@ -141,9 +212,12 @@ export default function ServerSetupScreen() {
                         <Text style={styles.stepTitle}>Troubleshooting</Text>
                     </View>
 
-                    <Text style={styles.problemTitle}>Server not starting?</Text>
+                    <Text style={styles.problemTitle}>If setup fails:</Text>
                     <View style={styles.codeBlock}>
-                        <Text style={styles.code}>pm2 logs paylap-relay</Text>
+                        <Text style={styles.code}># Run these commands in Termux:</Text>
+                        <Text style={styles.code}>pkg update && pkg upgrade</Text>
+                        <Text style={styles.code}>pkg install nodejs git</Text>
+                        <Text style={styles.code}>npm install -g pm2</Text>
                     </View>
 
                     <Text style={styles.problemTitle}>Check server status:</Text>
@@ -151,9 +225,9 @@ export default function ServerSetupScreen() {
                         <Text style={styles.code}>pm2 status</Text>
                     </View>
 
-                    <Text style={styles.problemTitle}>Restart server:</Text>
+                    <Text style={styles.problemTitle}>View logs:</Text>
                     <View style={styles.codeBlock}>
-                        <Text style={styles.code}>pm2 restart paylap-relay</Text>
+                        <Text style={styles.code}>pm2 logs paylap-relay</Text>
                     </View>
                 </View>
 
@@ -199,8 +273,9 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     subtitle: {
-        fontSize: 16,
-        color: '#aaa',
+        fontSize: 18,
+        color: '#4CAF50',
+        fontWeight: '600',
     },
     warningBox: {
         backgroundColor: 'rgba(255, 165, 0, 0.1)',
@@ -272,33 +347,51 @@ const styles = StyleSheet.create({
         lineHeight: 22,
         marginBottom: 12,
     },
-    linkButton: {
+    primaryButton: {
         backgroundColor: '#4CAF50',
-        padding: 12,
-        borderRadius: 8,
+        padding: 14,
+        borderRadius: 10,
         marginVertical: 8,
+        shadowColor: '#4CAF50',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
     },
-    linkButtonText: {
+    primaryButtonText: {
         color: '#fff',
-        fontSize: 14,
+        fontSize: 15,
         textAlign: 'center',
+        fontWeight: '600',
+    },
+    copyButton: {
+        backgroundColor: '#2196F3',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 14,
+        borderRadius: 10,
+        marginVertical: 8,
+        gap: 8,
+        shadowColor: '#2196F3',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
+    },
+    copyButtonIcon: {
+        fontSize: 20,
+    },
+    copyButtonText: {
+        color: '#fff',
+        fontSize: 15,
         fontWeight: '600',
     },
     note: {
         fontSize: 13,
-        color: '#888',
+        color: '#FFA500',
         fontStyle: 'italic',
         marginTop: 8,
-    },
-    bulletList: {
-        marginLeft: 8,
-        marginVertical: 8,
-    },
-    bullet: {
-        fontSize: 14,
-        color: '#ddd',
-        marginVertical: 4,
-        lineHeight: 20,
     },
     codeBlock: {
         backgroundColor: '#1a1a1a',
@@ -310,20 +403,68 @@ const styles = StyleSheet.create({
     },
     code: {
         fontFamily: 'monospace',
-        fontSize: 14,
+        fontSize: 13,
         color: '#4CAF50',
-        marginBottom: 8,
+        marginBottom: 4,
     },
-    infoBox: {
+    codeComment: {
+        fontFamily: 'monospace',
+        fontSize: 12,
+        color: '#888',
+        marginBottom: 2,
+    },
+    instructionBox: {
         backgroundColor: 'rgba(76, 175, 80, 0.1)',
         borderRadius: 8,
-        padding: 12,
-        marginTop: 12,
+        padding: 16,
+        marginTop: 8,
     },
-    infoText: {
+    instructionText: {
+        fontSize: 14,
+        color: '#ddd',
+        marginBottom: 8,
+        lineHeight: 20,
+    },
+    bulletList: {
+        marginLeft: 8,
+        marginVertical: 8,
+    },
+    bullet: {
+        fontSize: 14,
+        color: '#ddd',
+        marginVertical: 4,
+        lineHeight: 20,
+    },
+    successBox: {
+        backgroundColor: 'rgba(76, 175, 80, 0.15)',
+        borderRadius: 8,
+        padding: 14,
+        marginTop: 12,
+        borderWidth: 1,
+        borderColor: '#4CAF50',
+    },
+    successText: {
         color: '#4CAF50',
-        fontSize: 13,
-        lineHeight: 18,
+        fontSize: 14,
+        lineHeight: 20,
+        fontWeight: '600',
+        textAlign: 'center',
+    },
+    verifyList: {
+        backgroundColor: 'rgba(33, 150, 243, 0.1)',
+        borderRadius: 8,
+        padding: 16,
+        marginTop: 8,
+    },
+    verifyItem: {
+        fontSize: 14,
+        color: '#ddd',
+        marginBottom: 8,
+        lineHeight: 20,
+    },
+    successColor: {
+        color: '#4CAF50',
+        fontWeight: 'bold',
     },
     problemTitle: {
         fontSize: 15,
