@@ -104,21 +104,26 @@ export default function KioskScreen() {
             setVerificationResult(result);
 
             if (result.access_granted && result.success) {
-                // 3. Move to Unlocking stage
+                // 3. Move to Unlocking stage (Showing "Please wait for door to open")
                 setModalState('unlocking');
                 console.log('✅ Access granted! Unlocking door...');
 
                 const relayResult = await unlockDoor();
 
                 if (relayResult.success) {
+                    // 4. Success state (The door is now open)
                     setModalState('success');
-                    // Note: Node server handles auto-locking after 3-5 seconds
                 } else {
+                    // 5. Door unlock fail (but face matched)
                     console.error('❌ Door unlock failed:', relayResult.error);
-                    setModalState('success'); // Still show success as face matched
+                    setModalState('error');
+                    setVerificationResult({
+                        ...result,
+                        error: 'Door Open Failed. Please try again or contact staff.'
+                    });
                 }
 
-                // Close modal after showing success for a bit
+                // Close modal after showing status for a bit
                 setTimeout(() => {
                     setShowModal(false);
                     setModalState('idle');
@@ -149,7 +154,7 @@ export default function KioskScreen() {
                         <View style={styles.scannerCircle}>
                             <ActivityIndicator size="large" color="#4CAF50" />
                         </View>
-                        <Text style={styles.modalTitle}>Scanning Face</Text>
+                        <Text style={styles.modalTitle}>Searching...</Text>
                         <Text style={styles.modalMessage}>Please wait while we verify your identity...</Text>
                     </>
                 );
@@ -157,13 +162,13 @@ export default function KioskScreen() {
                 return (
                     <>
                         <View style={styles.scannerCircle}>
-                            <Text style={styles.hugeIcon}>🔓</Text>
+                            <ActivityIndicator size="large" color="#4CAF50" />
                         </View>
-                        <Text style={styles.modalTitle}>Unlocking Door</Text>
+                        <Text style={styles.modalTitle}>Face Recognized!</Text>
                         <Text style={[styles.modalMessage, { color: '#4CAF50' }]}>
                             Welcome, {verificationResult?.member?.name}!
                         </Text>
-                        <Text style={styles.modalDetail}>Please stand by...</Text>
+                        <Text style={styles.modalDetail}>Please wait for door to open...</Text>
                     </>
                 );
             case 'success':
@@ -172,8 +177,8 @@ export default function KioskScreen() {
                         <View style={[styles.scannerCircle, { borderColor: '#4CAF50' }]}>
                             <Text style={styles.hugeIcon}>✅</Text>
                         </View>
-                        <Text style={[styles.modalTitle, { color: '#4CAF50' }]}>Access Granted</Text>
-                        <Text style={styles.modalMessage}>The door is now open.</Text>
+                        <Text style={[styles.modalTitle, { color: '#4CAF50' }]}>Door is Open</Text>
+                        <Text style={styles.modalMessage}>You may now enter the gym.</Text>
                         <Text style={styles.modalDetail}>Have a great workout!</Text>
                     </>
                 );
@@ -187,7 +192,7 @@ export default function KioskScreen() {
                         <Text style={styles.modalMessage}>
                             {verificationResult?.error || 'Face not recognized'}
                         </Text>
-                        <Text style={styles.modalDetail}>Please try again or contact staff.</Text>
+                        <Text style={styles.modalDetail}>Please try again.</Text>
                     </>
                 );
             default:
@@ -237,7 +242,7 @@ export default function KioskScreen() {
                     disabled={modalState !== 'idle'}
                 >
                     <Text style={styles.captureButtonText}>
-                        {modalState === 'idle' ? 'Start Scanning' : 'Processing...'}
+                        {modalState === 'idle' ? 'Scan My Face' : 'Checking...'}
                     </Text>
                 </TouchableOpacity>
             </View>
@@ -340,11 +345,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     faceGuide: {
-        width: width * 0.6,
-        height: width * 0.8,
-        borderRadius: 100,
-        borderWidth: 2,
-        borderColor: 'rgba(255, 255, 255, 0.3)',
+        width: width * 0.75, // Increased width from 0.6
+        height: width * 0.9, // Increased height from 0.8
+        borderRadius: 30,    // Made it more of a rounded rectangle than an oval
+        borderWidth: 3,     // Slightly thicker line
+        borderColor: 'rgba(255, 255, 255, 0.4)',
         borderStyle: 'dashed',
     },
     footer: {
