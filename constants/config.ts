@@ -15,10 +15,11 @@ export const config = {
         timeout: 10000, // 10 seconds
     },
 
-    // VPS API Configuration
-    vps: {
-        baseUrl: 'https://api.paylapfitness.com',
-        verifyFaceEndpoint: '/api/kiosk/verify-face',
+    // Python Face Recognition API Configuration
+    python: {
+        baseUrl: 'https://pythonapi.paylapfitness.com',
+        verifyFaceEndpoint: '/api/verify-face',
+        apiKey: 'paylap_kiosk_2026',
         timeout: 10000, // 10 seconds
     },
 
@@ -70,10 +71,10 @@ export const getLaravelUrl = (endpoint: string) => {
 };
 
 /**
- * Get VPS API URL
+ * Get Python API URL
  */
-export const getVpsUrl = (endpoint: string) => {
-    return `${config.vps.baseUrl}${endpoint}`;
+export const getPythonUrl = (endpoint: string) => {
+    return `${config.python.baseUrl}${endpoint}`;
 };
 
 /**
