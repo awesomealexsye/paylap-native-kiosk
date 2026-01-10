@@ -6,6 +6,15 @@
 let currentRelayUrl = 'http://localhost:3000';
 
 export const config = {
+    // Laravel API Configuration
+    laravel: {
+        baseUrl: 'https://emil-prohibitive-stoically.ngrok-free.dev',
+        loginEndpoint: '/api/auth/login',
+        otpVerifyEndpoint: '/api/auth/otp-verify',
+        gymListEndpoint: '/api/gym/list',
+        timeout: 10000, // 10 seconds
+    },
+
     // VPS API Configuration
     vps: {
         baseUrl: 'https://api.paylapfitness.com',
@@ -51,6 +60,13 @@ export const config = {
  */
 export const getRelayUrl = (endpoint: string) => {
     return `${currentRelayUrl}${endpoint}`;
+};
+
+/**
+ * Get Laravel API URL
+ */
+export const getLaravelUrl = (endpoint: string) => {
+    return `${config.laravel.baseUrl}${endpoint}`;
 };
 
 /**

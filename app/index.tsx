@@ -1,7 +1,3 @@
-/**
- * Main Kiosk Screen - Camera and Face Verification
- */
-
 import React, { useState, useRef, useEffect } from 'react';
 import {
     View,
@@ -18,17 +14,29 @@ import { verifyFace } from '../services/faceVerifyService';
 import { unlockDoor } from '../services/relayService';
 import { checkServerHealth } from '../services/serverHealthService';
 import ServerOfflineModal from '../components/ServerOfflineModal';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function KioskScreen() {
+    const { isLoading, isAuthenticated, selectedGym, logout } = useAuth();
     const [permission, requestPermission] = useCameraPermissions();
     const [isProcessing, setIsProcessing] = useState(false);
     const [serverOfflineVisible, setServerOfflineVisible] = useState(false);
     const cameraRef = useRef<CameraView>(null);
 
+    // Check authentication on mount
+    useEffect(() => {
+        if (!isLoading && !isAuthenticated) {
+            // Not authenticated, redirect to login
+            router.replace('/login');
+        }
+    }, [isLoading, isAuthenticated]);
+
     // Check server health on mount
     useEffect(() => {
-        checkServer();
-    }, []);
+        if (isAuthenticated) {
+            checkServer();
+        }
+    }, [isAuthenticated]);
 
     const checkServer = async () => {
         const health = await checkServerHealth();
@@ -137,14 +145,29 @@ export default function KioskScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.title}>Gym Check-In</Text>
+                <View style={styles.headerTop}>
+                    <View>
+                        <Text style={styles.title}>Face Check-In</Text>
+                        {selectedGym && (
+                            <Text style={styles.gymName}>📍 {selectedGym.name}</Text>
+                        )}
+                    </View>
+                    <TouchableOpacity
+                        style={styles.actionButton}
+                        onPress={() => {
+                            if (isAuthenticated) {
+                                router.push('/dashboard');
+                            } else {
+                                router.push('/login');
+                            }
+                        }}
+                    >
+                        <Text style={styles.actionButtonIcon}>
+                            {isAuthenticated ? '🏠' : '🔐'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
                 <Text style={styles.subtitle}>Position your face in the camera</Text>
-                <TouchableOpacity
-                    style={styles.settingsButton}
-                    onPress={() => router.push('/settings')}
-                >
-                    <Text style={styles.settingsIcon}>⚙️</Text>
-                </TouchableOpacity>
             </View>
 
             <View style={styles.cameraContainer}>
@@ -188,15 +211,43 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#1a1a1a',
     },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        color: '#fff',
+        fontSize: 16,
+        marginTop: 16,
+    },
     header: {
         padding: 24,
+        paddingBottom: 16,
+    },
+    headerTop: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 8,
+    },
+    actionButton: {
+        width: 48,
+        height: 48,
+        backgroundColor: '#252525',
+        borderRadius: 24,
+        justifyContent: 'center',
         alignItems: 'center',
-        position: 'relative',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    actionButtonIcon: {
+        fontSize: 24,
     },
     settingsButton: {
-        position: 'absolute',
-        top: 24,
-        right: 24,
         width: 44,
         height: 44,
         backgroundColor: '#252525',
@@ -213,13 +264,18 @@ const styles = StyleSheet.create({
         fontSize: 24,
     },
     title: {
-        fontSize: 32,
+        fontSize: 28,
         fontWeight: 'bold',
         color: '#fff',
-        marginBottom: 8,
+        marginBottom: 4,
+    },
+    gymName: {
+        fontSize: 14,
+        color: '#4CAF50',
+        fontWeight: '600',
     },
     subtitle: {
-        fontSize: 16,
+        fontSize: 14,
         color: '#aaa',
     },
     cameraContainer: {
@@ -253,15 +309,6 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 20,
         fontWeight: 'bold',
-    },
-    loadingContainer: {
-        alignItems: 'center',
-        padding: 20,
-    },
-    loadingText: {
-        color: '#fff',
-        fontSize: 16,
-        marginTop: 12,
     },
     permissionContainer: {
         flex: 1,
