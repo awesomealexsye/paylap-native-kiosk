@@ -4,11 +4,11 @@ import {
     Text,
     TouchableOpacity,
     StyleSheet,
-    Alert,
     ActivityIndicator,
     Modal,
+    Dimensions,
 } from 'react-native';
-import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { unlockDoor } from '../services/relayService';
@@ -17,19 +17,22 @@ import ServerOfflineModal from '../components/ServerOfflineModal';
 import { useAuth } from '../contexts/AuthContext';
 import faceVerificationService from '../services/faceVerificationService';
 
+const { width } = Dimensions.get('window');
+
+type ModalState = 'idle' | 'scanning' | 'unlocking' | 'success' | 'error';
+
 export default function KioskScreen() {
     const { isLoading, isAuthenticated, selectedGym } = useAuth();
     const [permission, requestPermission] = useCameraPermissions();
-    const [isProcessing, setIsProcessing] = useState(false);
+    const [modalState, setModalState] = useState<ModalState>('idle');
     const [serverOfflineVisible, setServerOfflineVisible] = useState(false);
     const [verificationResult, setVerificationResult] = useState<any>(null);
-    const [showResultModal, setShowResultModal] = useState(false);
+    const [showModal, setShowModal] = useState(false);
     const cameraRef = useRef<CameraView>(null);
 
     // Check authentication on mount
     useEffect(() => {
         if (!isLoading && !isAuthenticated) {
-            // Not authenticated, redirect to login
             router.replace('/login');
         }
     }, [isLoading, isAuthenticated]);
@@ -49,10 +52,7 @@ export default function KioskScreen() {
         }
     };
 
-    // Request camera permission if not granted
-    if (!permission) {
-        return <View />;
-    }
+    if (!permission) return <View />;
 
     if (!permission.granted) {
         return (
@@ -67,7 +67,6 @@ export default function KioskScreen() {
         );
     }
 
-    // Show loading while checking authentication
     if (isLoading) {
         return (
             <SafeAreaView style={styles.container}>
@@ -82,54 +81,117 @@ export default function KioskScreen() {
     const handleCaptureFace = async () => {
         if (!cameraRef.current) return;
 
-        setIsProcessing(true);
+        // Start scanning
+        setModalState('scanning');
+        setShowModal(true);
+        setVerificationResult(null);
 
         try {
-            // Capture photo from camera
+            // 1. Capture photo
             const photo = await cameraRef.current.takePictureAsync({
                 base64: false,
-                quality: 0.8,
+                quality: 0.7,
             });
 
             if (!photo || !photo.uri) {
-                Alert.alert('Error', 'Failed to capture photo');
+                setModalState('error');
+                setVerificationResult({ error: 'Failed to capture photo' });
                 return;
             }
 
-            console.log('📸 Photo captured:', photo.uri);
-
-            // Step 1: Verify face with Python API
+            // 2. Verify with Python API
             const result = await faceVerificationService.verifyFace(photo.uri);
-
-            console.log('🎯 Verification result:', result);
-
-            // Show result modal
             setVerificationResult(result);
-            setShowResultModal(true);
 
-            // Auto-dismiss after 3 seconds
-            setTimeout(() => {
-                setShowResultModal(false);
-            }, 3000);
-
-            // Step 2: If access granted, unlock door via relay
             if (result.access_granted && result.success) {
+                // 3. Move to Unlocking stage
+                setModalState('unlocking');
                 console.log('✅ Access granted! Unlocking door...');
 
                 const relayResult = await unlockDoor();
 
-                if (!relayResult.success) {
+                if (relayResult.success) {
+                    setModalState('success');
+                    // Note: Node server handles auto-locking after 3-5 seconds
+                } else {
                     console.error('❌ Door unlock failed:', relayResult.error);
-                    // Still show success for face verification
+                    setModalState('success'); // Still show success as face matched
                 }
+
+                // Close modal after showing success for a bit
+                setTimeout(() => {
+                    setShowModal(false);
+                    setModalState('idle');
+                }, 4000);
             } else {
-                console.log('❌ Access denied:', result.error);
+                setModalState('error');
+                setTimeout(() => {
+                    setShowModal(false);
+                    setModalState('idle');
+                }, 3000);
             }
         } catch (error: any) {
-            console.error('❌ Error:', error);
-            Alert.alert('Error', 'Something went wrong. Please try again.');
-        } finally {
-            setIsProcessing(false);
+            console.error('❌ Process error:', error);
+            setModalState('error');
+            setVerificationResult({ error: 'System error. Please try again.' });
+            setTimeout(() => {
+                setShowModal(false);
+                setModalState('idle');
+            }, 3000);
+        }
+    };
+
+    const renderModalContent = () => {
+        switch (modalState) {
+            case 'scanning':
+                return (
+                    <>
+                        <View style={styles.scannerCircle}>
+                            <ActivityIndicator size="large" color="#4CAF50" />
+                        </View>
+                        <Text style={styles.modalTitle}>Scanning Face</Text>
+                        <Text style={styles.modalMessage}>Please wait while we verify your identity...</Text>
+                    </>
+                );
+            case 'unlocking':
+                return (
+                    <>
+                        <View style={styles.scannerCircle}>
+                            <Text style={styles.hugeIcon}>🔓</Text>
+                        </View>
+                        <Text style={styles.modalTitle}>Unlocking Door</Text>
+                        <Text style={[styles.modalMessage, { color: '#4CAF50' }]}>
+                            Welcome, {verificationResult?.member?.name}!
+                        </Text>
+                        <Text style={styles.modalDetail}>Please stand by...</Text>
+                    </>
+                );
+            case 'success':
+                return (
+                    <>
+                        <View style={[styles.scannerCircle, { borderColor: '#4CAF50' }]}>
+                            <Text style={styles.hugeIcon}>✅</Text>
+                        </View>
+                        <Text style={[styles.modalTitle, { color: '#4CAF50' }]}>Access Granted</Text>
+                        <Text style={styles.modalMessage}>The door is now open.</Text>
+                        <Text style={styles.modalDetail}>Have a great workout!</Text>
+                    </>
+                );
+            case 'error':
+                return (
+                    <>
+                        <View style={[styles.scannerCircle, { borderColor: '#FF5252' }]}>
+                            <Text style={styles.hugeIcon}>❌</Text>
+                        </View>
+                        <Text style={[styles.modalTitle, { color: '#FF5252' }]}>Access Denied</Text>
+                        <Text style={styles.modalMessage}>
+                            {verificationResult?.error || 'Face not recognized'}
+                        </Text>
+                        <Text style={styles.modalDetail}>Please try again or contact staff.</Text>
+                    </>
+                );
+            default:
+                return null;
         }
     };
 
@@ -145,44 +207,39 @@ export default function KioskScreen() {
                     </View>
                     <TouchableOpacity
                         style={styles.actionButton}
-                        onPress={() => {
-                            if (isAuthenticated) {
-                                router.push('/dashboard');
-                            } else {
-                                router.push('/login');
-                            }
-                        }}
+                        onPress={() => router.push(isAuthenticated ? '/dashboard' : '/login')}
                     >
                         <Text style={styles.actionButtonIcon}>
                             {isAuthenticated ? '🏠' : '🔐'}
                         </Text>
                     </TouchableOpacity>
                 </View>
-                <Text style={styles.subtitle}>Position your face in the camera</Text>
+                <Text style={styles.subtitle}>Position your face in the camera frame</Text>
             </View>
 
-            <View style={styles.cameraContainer}>
-                <CameraView
-                    ref={cameraRef}
-                    style={styles.camera}
-                    facing="front"
-                />
+            <View style={styles.cameraFrame}>
+                <View style={styles.cameraContainer}>
+                    <CameraView
+                        ref={cameraRef}
+                        style={styles.camera}
+                        facing="front"
+                    />
+                    <View style={styles.faceOverlay}>
+                        <View style={styles.faceGuide} />
+                    </View>
+                </View>
             </View>
 
             <View style={styles.footer}>
-                {isProcessing ? (
-                    <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color="#4CAF50" />
-                        <Text style={styles.loadingText}>Verifying face...</Text>
-                    </View>
-                ) : (
-                    <TouchableOpacity
-                        style={styles.captureButton}
-                        onPress={handleCaptureFace}
-                    >
-                        <Text style={styles.captureButtonText}>Scan Face</Text>
-                    </TouchableOpacity>
-                )}
+                <TouchableOpacity
+                    style={styles.captureButton}
+                    onPress={handleCaptureFace}
+                    disabled={modalState !== 'idle'}
+                >
+                    <Text style={styles.captureButtonText}>
+                        {modalState === 'idle' ? 'Start Scanning' : 'Processing...'}
+                    </Text>
+                </TouchableOpacity>
             </View>
 
             {/* Server Offline Modal */}
@@ -192,42 +249,15 @@ export default function KioskScreen() {
                 onClose={() => setServerOfflineVisible(false)}
             />
 
-            {/* Verification Result Modal */}
+            {/* Unified Verification Modal */}
             <Modal
-                visible={showResultModal}
+                visible={showModal}
                 transparent
                 animationType="fade"
-                onRequestClose={() => setShowResultModal(false)}
             >
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
-                        {verificationResult?.access_granted ? (
-                            <>
-                                <Text style={styles.modalIcon}>✅</Text>
-                                <Text style={styles.modalTitle}>Access Granted!</Text>
-                                <Text style={styles.modalMessage}>
-                                    Welcome, {verificationResult.member?.name || 'Member'}
-                                </Text>
-                                {verificationResult.member?.code && (
-                                    <Text style={styles.modalDetail}>
-                                        Code: {verificationResult.member.code}
-                                    </Text>
-                                )}
-                                {verificationResult.confidence && (
-                                    <Text style={styles.modalDetail}>
-                                        Confidence: {verificationResult.confidence.toFixed(1)}%
-                                    </Text>
-                                )}
-                            </>
-                        ) : (
-                            <>
-                                <Text style={styles.modalIcon}>❌</Text>
-                                <Text style={styles.modalTitle}>Access Denied</Text>
-                                <Text style={styles.modalMessage}>
-                                    {verificationResult?.error || 'Face not recognized'}
-                                </Text>
-                            </>
-                        )}
+                        {renderModalContent()}
                     </View>
                 </View>
             </Modal>
@@ -252,7 +282,6 @@ const styles = StyleSheet.create({
     },
     header: {
         padding: 24,
-        paddingBottom: 16,
     },
     headerTop: {
         flexDirection: 'row',
@@ -263,64 +292,60 @@ const styles = StyleSheet.create({
     actionButton: {
         width: 48,
         height: 48,
-        backgroundColor: '#252525',
+        backgroundColor: '#1f1f1f',
         borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 4,
+        borderWidth: 1,
+        borderColor: '#333',
     },
     actionButtonIcon: {
-        fontSize: 24,
-    },
-    settingsButton: {
-        width: 44,
-        height: 44,
-        backgroundColor: '#252525',
-        borderRadius: 22,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 4,
-    },
-    settingsIcon: {
-        fontSize: 24,
+        fontSize: 22,
     },
     title: {
-        fontSize: 28,
+        fontSize: 32,
         fontWeight: 'bold',
         color: '#fff',
-        marginBottom: 4,
+        letterSpacing: 0.5,
     },
     gymName: {
         fontSize: 14,
         color: '#4CAF50',
         fontWeight: '600',
+        marginTop: 4,
     },
     subtitle: {
-        fontSize: 14,
-        color: '#aaa',
+        fontSize: 15,
+        color: '#888',
+        marginTop: 4,
+    },
+    cameraFrame: {
+        flex: 1,
+        paddingHorizontal: 24,
     },
     cameraContainer: {
         flex: 1,
-        marginHorizontal: 24,
-        borderRadius: 20,
+        borderRadius: 30,
         overflow: 'hidden',
         backgroundColor: '#1a1a1a',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.5,
-        shadowRadius: 10,
-        elevation: 10,
+        borderWidth: 2,
+        borderColor: '#333',
     },
     camera: {
         flex: 1,
+    },
+    faceOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    faceGuide: {
+        width: width * 0.6,
+        height: width * 0.8,
+        borderRadius: 100,
+        borderWidth: 2,
+        borderColor: 'rgba(255, 255, 255, 0.3)',
+        borderStyle: 'dashed',
     },
     footer: {
         padding: 24,
@@ -331,11 +356,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 32,
         borderRadius: 12,
         marginTop: 16,
-        shadowColor: '#4CAF50',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
     },
     buttonText: {
         color: '#fff',
@@ -346,57 +366,73 @@ const styles = StyleSheet.create({
     captureButton: {
         backgroundColor: '#4CAF50',
         paddingVertical: 20,
-        borderRadius: 12,
+        borderRadius: 16,
         alignItems: 'center',
         shadowColor: '#4CAF50',
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
+        shadowRadius: 10,
+        elevation: 10,
     },
     captureButtonText: {
         color: '#fff',
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: 'bold',
+        letterSpacing: 1,
     },
-    // Modal styles
+    // Modal Styles
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 24,
     },
     modalContent: {
         backgroundColor: '#1a1a1a',
-        borderRadius: 20,
+        borderRadius: 30,
         padding: 40,
-        width: '90%',
+        width: '85%',
         maxWidth: 400,
         alignItems: 'center',
-        borderWidth: 2,
-        borderColor: '#252525',
+        borderWidth: 1,
+        borderColor: '#333',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.5,
+        shadowRadius: 20,
+        elevation: 20,
     },
-    modalIcon: {
-        fontSize: 80,
-        marginBottom: 20,
+    scannerCircle: {
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        borderWidth: 3,
+        borderColor: '#333',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    hugeIcon: {
+        fontSize: 48,
     },
     modalTitle: {
-        fontSize: 28,
+        fontSize: 24,
         fontWeight: 'bold',
         color: '#fff',
         marginBottom: 12,
         textAlign: 'center',
     },
     modalMessage: {
-        fontSize: 18,
+        fontSize: 16,
         color: '#aaa',
         textAlign: 'center',
-        marginBottom: 8,
+        marginBottom: 16,
+        lineHeight: 24,
     },
     modalDetail: {
         fontSize: 14,
-        color: '#4CAF50',
-        marginTop: 8,
+        color: '#666',
+        textAlign: 'center',
+        fontStyle: 'italic',
     },
 });

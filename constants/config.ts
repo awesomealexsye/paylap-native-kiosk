@@ -8,7 +8,7 @@ let currentRelayUrl = 'http://localhost:3000';
 export const config = {
     // Laravel API Configuration
     laravel: {
-        baseUrl: 'https://emil-prohibitive-stoically.ngrok-free.dev',
+        baseUrl: 'https://api.paylapfitness.com',
         loginEndpoint: '/api/auth/login',
         otpVerifyEndpoint: '/api/auth/otp-verify',
         gymListEndpoint: '/api/gym/list',
@@ -33,7 +33,7 @@ export const config = {
         port: 3000,
         unlockEndpoint: '/unlock',
         statusEndpoint: '/status',
-        timeout: 5000, // 5 seconds
+        timeout: 10000, // Increased to 10 seconds to allow for slow WiFi relay connections
     },
 
     // Gym & Device Configuration

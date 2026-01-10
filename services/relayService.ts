@@ -20,7 +20,7 @@ export interface RelayStatus {
 /**
  * Unlock the door via relay
  * Sends HTTP POST to local relay server
- * Server will unlock for configured duration (default 3 seconds)
+ * Server handles auto-locking automatically
  */
 export const unlockDoor = async (): Promise<RelayResponse> => {
     try {
