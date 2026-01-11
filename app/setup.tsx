@@ -41,12 +41,14 @@ export default function ServerSetupScreen() {
                         style={styles.backButton}
                         onPress={() => router.back()}
                     >
-                        <Text style={styles.backText}>← Back</Text>
+                        <Text style={styles.backIcon}>←</Text>
                     </TouchableOpacity>
-                    <Text style={styles.title}>Relay Server Setup</Text>
-                    <Text style={styles.subtitle}>
-                        3 Simple Steps - Fully Automated!
-                    </Text>
+                    <View style={styles.headerText}>
+                        <Text style={styles.title}>Relay Server Setup</Text>
+                        <Text style={styles.subtitle}>
+                            3 Simple Steps - Fully Automated!
+                        </Text>
+                    </View>
                 </View>
 
                 {/* Important Note */}
@@ -257,14 +259,27 @@ const styles = StyleSheet.create({
         padding: 20,
     },
     header: {
+        flexDirection: 'row',
+        alignItems: 'center',
         marginBottom: 24,
     },
     backButton: {
-        marginBottom: 16,
+        width: 44,
+        height: 44,
+        backgroundColor: '#1a1a1a',
+        borderRadius: 22,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 16,
+        borderWidth: 1,
+        borderColor: '#252525',
     },
-    backText: {
+    backIcon: {
+        fontSize: 24,
         color: '#4CAF50',
-        fontSize: 16,
+    },
+    headerText: {
+        flex: 1,
     },
     title: {
         fontSize: 32,

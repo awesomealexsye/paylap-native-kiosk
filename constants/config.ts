@@ -37,7 +37,7 @@ export const config = {
         port: 3000,
         unlockEndpoint: '/unlock',
         statusEndpoint: '/status',
-        timeout: 10000, // Increased to 10 seconds to allow for slow WiFi relay connections
+        timeout: 0, // Increased to 10 seconds to allow for slow WiFi relay connections
     },
 
     // Gym & Device Configuration

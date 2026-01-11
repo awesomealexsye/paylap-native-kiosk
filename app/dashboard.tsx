@@ -24,7 +24,6 @@ export default function DashboardScreen() {
 
     // Determine number of columns based on screen width
     const isTablet = width >= 768;
-    const numColumns = isTablet ? 3 : 2;
 
     const handleLogout = async () => {
         await logout();
@@ -36,6 +35,7 @@ export default function DashboardScreen() {
             id: 'owner',
             title: 'Owner Info',
             icon: '👤',
+            gradient: ['#667eea', '#764ba2'],
             description: 'View your profile',
             onPress: () => router.push('/owner-info'),
         },
@@ -43,20 +43,15 @@ export default function DashboardScreen() {
             id: 'gyms',
             title: 'My Gyms',
             icon: '🏋️',
+            gradient: ['#f093fb', '#f5576c'],
             description: 'Manage gym locations',
             onPress: () => router.push('/gym-list'),
-        },
-        {
-            id: 'kiosk',
-            title: 'Face Kiosk',
-            icon: '📸',
-            description: 'Open check-in kiosk',
-            onPress: () => router.push('/'),
         },
         {
             id: 'setup',
             title: 'Setup Guide',
             icon: '📋',
+            gradient: ['#4facfe', '#00f2fe'],
             description: 'Installation instructions',
             onPress: () => router.push('/setup'),
         },
@@ -64,6 +59,7 @@ export default function DashboardScreen() {
             id: 'settings',
             title: 'Settings',
             icon: '⚙️',
+            gradient: ['#43e97b', '#38f9d7'],
             description: 'App configuration',
             onPress: () => router.push('/settings'),
         },
@@ -71,6 +67,7 @@ export default function DashboardScreen() {
             id: 'sync',
             title: 'Sync Members',
             icon: '🔄',
+            gradient: ['#fa709a', '#fee140'],
             description: 'Sync local face database',
             onPress: () => router.push('/sync-members'),
         },
@@ -78,7 +75,7 @@ export default function DashboardScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <ScrollView>
+            <ScrollView showsVerticalScrollIndicator={false}>
                 {/* Header */}
                 <View style={styles.header}>
                     <View>
@@ -142,55 +139,56 @@ export default function DashboardScreen() {
                     </View>
                 )}
 
-                {/* Quick Stats */}
-                <View style={styles.quickStatsContainer}>
-                    <Text style={styles.sectionTitle}>Quick Stats</Text>
-                    <View style={styles.statsGrid}>
-                        <View style={styles.quickStatCard}>
-                            <Text style={styles.quickStatIcon}>✅</Text>
-                            <Text style={styles.quickStatValue}>0</Text>
-                            <Text style={styles.quickStatLabel}>Today's Check-ins</Text>
-                        </View>
-                        <View style={styles.quickStatCard}>
-                            <Text style={styles.quickStatIcon}>👥</Text>
-                            <Text style={styles.quickStatValue}>
-                                {selectedGym?.members_count || 0}
-                            </Text>
-                            <Text style={styles.quickStatLabel}>Total Members</Text>
-                        </View>
-                        <View style={styles.quickStatCard}>
-                            <Text style={styles.quickStatIcon}>💪</Text>
-                            <Text style={styles.quickStatValue}>
-                                {selectedGym?.trainers_count || 0}
-                            </Text>
-                            <Text style={styles.quickStatLabel}>Trainers</Text>
-                        </View>
-                        <View style={styles.quickStatCard}>
-                            <Text style={styles.quickStatIcon}>🔥</Text>
-                            <Text style={styles.quickStatValue}>0</Text>
-                            <Text style={styles.quickStatLabel}>Active Now</Text>
-                        </View>
-                    </View>
-                </View>
-
                 {/* Menu Items */}
                 <View style={styles.menuContainer}>
                     <Text style={styles.sectionTitle}>Menu</Text>
                     <View style={styles.menuGrid}>
-                        {menuItems.map((item) => (
-                            <TouchableOpacity
-                                key={item.id}
-                                style={[
-                                    styles.menuItem,
-                                    { width: isTablet ? '32%' : '48%' }
-                                ]}
-                                onPress={item.onPress}
-                            >
-                                <Text style={styles.menuIcon}>{item.icon}</Text>
-                                <Text style={styles.menuTitle}>{item.title}</Text>
-                                <Text style={styles.menuDescription}>{item.description}</Text>
-                            </TouchableOpacity>
-                        ))}
+                        {menuItems.map((item) => {
+                            // Define gradient colors for each menu item
+                            const getGradientColor = (id: string) => {
+                                const colors: Record<string, string> = {
+                                    owner: '#667eea',
+                                    gyms: '#f093fb',
+                                    setup: '#4facfe',
+                                    settings: '#43e97b',
+                                    sync: '#fa709a',
+                                };
+                                return colors[id] || '#4CAF50';
+                            };
+
+                            const accentColor = getGradientColor(item.id);
+
+                            // Calculate width: (100% - total gap) / number of columns
+                            // Mobile: (100% - 16px) / 2 = ~48%
+                            // Tablet: (100% - 32px) / 3 = ~31%
+                            const cardWidth = isTablet ? '31%' : '47.5%';
+
+                            return (
+                                <TouchableOpacity
+                                    key={item.id}
+                                    style={[
+                                        styles.menuItem,
+                                        { width: cardWidth }
+                                    ]}
+                                    onPress={item.onPress}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={[
+                                        styles.menuIconContainer,
+                                        {
+                                            backgroundColor: `${accentColor}15`,
+                                            borderColor: `${accentColor}30`,
+                                        }
+                                    ]}>
+                                        <Text style={styles.menuIcon}>{item.icon}</Text>
+                                    </View>
+                                    <Text style={styles.menuTitle}>{item.title}</Text>
+                                    <Text style={styles.menuDescription} numberOfLines={1}>
+                                        {item.description}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </View>
                 </View>
             </ScrollView>
@@ -204,7 +202,9 @@ export default function DashboardScreen() {
             >
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
-                        <Text style={styles.modalIcon}>🚪</Text>
+                        <View style={styles.modalIconContainer}>
+                            <Text style={styles.modalIcon}>🚪</Text>
+                        </View>
                         <Text style={styles.modalTitle}>Logout</Text>
                         <Text style={styles.modalMessage}>
                             Are you sure you want to logout?
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
         paddingBottom: 16,
     },
     greeting: {
-        fontSize: 28,
+        fontSize: 32,
         fontWeight: 'bold',
         color: '#fff',
         marginBottom: 4,
@@ -257,55 +257,54 @@ const styles = StyleSheet.create({
         color: '#888',
     },
     logoutButton: {
-        width: 44,
-        height: 44,
-        backgroundColor: '#3a1a1a',
-        borderRadius: 22,
+        width: 48,
+        height: 48,
+        backgroundColor: '#1a1a1a',
+        borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 4,
+        borderWidth: 1,
+        borderColor: '#252525',
     },
     logoutIcon: {
-        fontSize: 20,
+        fontSize: 22,
     },
     currentGymCard: {
         backgroundColor: '#1a1a1a',
         marginHorizontal: 24,
-        marginBottom: 24,
-        borderRadius: 20,
-        padding: 20,
+        marginBottom: 32,
+        borderRadius: 24,
+        padding: 24,
         borderWidth: 2,
         borderColor: '#4CAF50',
         shadowColor: '#4CAF50',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 8,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
+        elevation: 12,
     },
     gymHeader: {
         flexDirection: 'row',
-        marginBottom: 20,
+        marginBottom: 24,
     },
     gymLogo: {
-        width: 64,
-        height: 64,
-        borderRadius: 16,
+        width: 72,
+        height: 72,
+        borderRadius: 18,
         backgroundColor: '#252525',
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 16,
+        borderWidth: 2,
+        borderColor: '#4CAF50',
     },
     logoImage: {
-        width: 64,
-        height: 64,
-        borderRadius: 16,
+        width: 72,
+        height: 72,
+        borderRadius: 18,
     },
     logoPlaceholder: {
-        fontSize: 32,
+        fontSize: 36,
         fontWeight: 'bold',
         color: '#4CAF50',
     },
@@ -314,17 +313,17 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     gymLabel: {
-        fontSize: 10,
+        fontSize: 11,
         color: '#4CAF50',
-        fontWeight: '600',
-        marginBottom: 4,
-        letterSpacing: 1,
+        fontWeight: '700',
+        marginBottom: 6,
+        letterSpacing: 1.5,
     },
     gymName: {
-        fontSize: 20,
+        fontSize: 22,
         fontWeight: 'bold',
         color: '#fff',
-        marginBottom: 4,
+        marginBottom: 6,
     },
     gymAddress: {
         fontSize: 14,
@@ -332,133 +331,131 @@ const styles = StyleSheet.create({
     },
     statsRow: {
         flexDirection: 'row',
-        gap: 12,
-        marginBottom: 16,
+        gap: 16,
+        marginBottom: 20,
     },
     statCard: {
         flex: 1,
         backgroundColor: '#252525',
-        borderRadius: 12,
-        padding: 16,
+        borderRadius: 16,
+        padding: 20,
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#333',
     },
     statValue: {
-        fontSize: 28,
+        fontSize: 32,
         fontWeight: 'bold',
         color: '#4CAF50',
-        marginBottom: 4,
+        marginBottom: 6,
     },
     statLabel: {
-        fontSize: 12,
+        fontSize: 13,
         color: '#888',
+        fontWeight: '500',
     },
     switchGymButton: {
-        backgroundColor: '#252525',
-        paddingVertical: 12,
-        borderRadius: 10,
+        backgroundColor: '#4CAF50',
+        paddingVertical: 14,
+        borderRadius: 12,
         alignItems: 'center',
     },
     switchGymText: {
-        color: '#4CAF50',
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    quickStatsContainer: {
-        paddingHorizontal: 24,
-        marginBottom: 24,
-    },
-    sectionTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
         color: '#fff',
-        marginBottom: 16,
-    },
-    statsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 12,
-    },
-    quickStatCard: {
-        backgroundColor: '#1a1a1a',
-        borderRadius: 16,
-        padding: 16,
-        width: '48%',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#252525',
-    },
-    quickStatIcon: {
-        fontSize: 32,
-        marginBottom: 8,
-    },
-    quickStatValue: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#fff',
-        marginBottom: 4,
-    },
-    quickStatLabel: {
-        fontSize: 12,
-        color: '#888',
-        textAlign: 'center',
+        fontSize: 15,
+        fontWeight: '700',
     },
     menuContainer: {
         paddingHorizontal: 24,
-        paddingBottom: 24,
+        paddingBottom: 32,
+    },
+    sectionTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#fff',
+        marginBottom: 20,
     },
     menuGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 12,
+        justifyContent: 'space-between',
     },
     menuItem: {
         backgroundColor: '#1a1a1a',
-        borderRadius: 16,
-        padding: 20,
+        borderRadius: 20,
+        padding: 24,
         borderWidth: 1,
         borderColor: '#252525',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.4,
+        shadowRadius: 12,
+        elevation: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 170,
+        marginBottom: 16,
+    },
+    menuIconContainer: {
+        width: 68,
+        height: 68,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 14,
+        borderWidth: 2,
+        shadowColor: '#4CAF50',
+        shadowOffset: { width: 0, height: 3 },
         shadowOpacity: 0.3,
-        shadowRadius: 4,
+        shadowRadius: 6,
         elevation: 4,
-        minHeight: 140,
     },
     menuIcon: {
-        fontSize: 32,
-        marginBottom: 12,
+        fontSize: 34,
     },
     menuTitle: {
-        fontSize: 18,
+        fontSize: 17,
         fontWeight: 'bold',
         color: '#fff',
-        marginBottom: 4,
+        marginBottom: 6,
+        textAlign: 'center',
     },
     menuDescription: {
-        fontSize: 14,
+        fontSize: 12,
         color: '#888',
+        textAlign: 'center',
     },
     // Modal styles
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 24,
     },
     modalContent: {
         backgroundColor: '#1a1a1a',
-        borderRadius: 20,
+        borderRadius: 24,
         padding: 32,
         width: '100%',
         maxWidth: 400,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#252525',
+        borderColor: '#333',
+    },
+    modalIconContainer: {
+        width: 80,
+        height: 80,
+        backgroundColor: '#252525',
+        borderRadius: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 20,
+        borderWidth: 2,
+        borderColor: '#ff4444',
     },
     modalIcon: {
-        fontSize: 64,
-        marginBottom: 16,
+        fontSize: 40,
     },
     modalTitle: {
         fontSize: 24,
@@ -471,6 +468,7 @@ const styles = StyleSheet.create({
         color: '#aaa',
         textAlign: 'center',
         marginBottom: 24,
+        lineHeight: 22,
     },
     modalButtons: {
         flexDirection: 'row',
@@ -485,6 +483,8 @@ const styles = StyleSheet.create({
     },
     cancelButton: {
         backgroundColor: '#252525',
+        borderWidth: 1,
+        borderColor: '#333',
     },
     cancelButtonText: {
         color: '#fff',
