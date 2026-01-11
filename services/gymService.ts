@@ -3,7 +3,7 @@
  */
 
 import { getLaravelUrl, config } from '../constants/config';
-import { GymListRequest, GymListResponse, Gym } from '../types/auth';
+import { GymListRequest, GymListResponse, Gym, MemberListResponse } from '../types/auth';
 import storageService from './storageService';
 
 class GymService {
@@ -81,11 +81,47 @@ class GymService {
     }
 
     /**
-     * Remove selected gym from storage
+     * Clear selected gym from storage
      */
     async clearSelectedGym(): Promise<void> {
         await storageService.removeSelectedGym();
         console.log('🗑️ Selected gym cleared');
+    }
+
+    /**
+     * Fetch list of members for a gym
+     */
+    async fetchMembers(gymId: number, userId: number, token: string, authKey: string): Promise<MemberListResponse> {
+        try {
+            const url = getLaravelUrl(config.laravel.memberListEndpoint);
+            const requestBody = {
+                gym_id: gymId,
+                user_id: userId,
+                auth_key: authKey
+            };
+
+            console.log('👥 Fetch Members API call:', url);
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                    'ngrok-skip-browser-warning': 'true',
+                },
+                body: JSON.stringify(requestBody),
+            });
+
+            const data: MemberListResponse = await response.json();
+            return data;
+        } catch (error) {
+            console.error('❌ Fetch members error:', error);
+            return {
+                status: false,
+                message: 'Failed to fetch members.',
+            };
+        }
     }
 }
 

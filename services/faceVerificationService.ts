@@ -45,12 +45,11 @@ class FaceVerificationService {
     /**
      * Verify face from image
      */
-    async verifyFace(imageUri: string): Promise<VerificationResult> {
+    async verifyFace(imageUri: string, gymId: number, token: string): Promise<VerificationResult> {
         try {
             const url = getPythonUrl(config.python.verifyFaceEndpoint);
 
             console.log('📸 Face Verification API call:', url);
-            console.log('🖼️  Image URI:', imageUri);
 
             // Convert image to base64
             const base64Image = await this.imageToBase64(imageUri);
@@ -60,14 +59,21 @@ class FaceVerificationService {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-API-Key': config.python.apiKey,
+                    'Authorization': `Bearer ${token}`,
                 },
                 body: JSON.stringify({
                     image: base64Image,
+                    gym_id: gymId,
                 }),
             });
 
-            console.log('📡 Response status:', response.status);
+            console.log('📡 Response status:', url, {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            }, {
+                image: "",
+                gym_id: gymId,
+            }, response.status);
 
             const responseText = await response.text();
             console.log('📥 Response text (first 500 chars):', responseText.substring(0, 500));

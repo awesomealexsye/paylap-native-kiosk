@@ -9,6 +9,7 @@ import {
     OTPVerifyRequest,
     OTPVerifyResponse,
     User,
+    KioskPasscodeResponse,
 } from '../types/auth';
 import storageService from './storageService';
 
@@ -121,6 +122,50 @@ class AuthService {
                 status: false,
                 message: 'Network error. Please check your connection.',
             };
+        }
+    }
+
+    /**
+     * Get the kiosk passcode for the current authenticated user
+     */
+    async getKioskPasscode(): Promise<KioskPasscodeResponse> {
+        try {
+            const token = await this.getAuthToken();
+            const user = await this.getCurrentUser();
+
+            if (!token || !user) {
+                return { status: false, kiosk_passcode: null };
+            }
+
+            // Using GET as per the curl example:
+            // curl -G --location '${LARAVEL_SERVER_API_HOST}/api/user/kiosk-passcode'
+            const baseUrl = getLaravelUrl(config.laravel.kioskPasscodeEndpoint);
+            const url = `${baseUrl}?user_id=${user.id}&auth_key=${user.auth_key}`;
+
+            console.log('🔐 Fetching Kiosk Passcode:', url);
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                    'ngrok-skip-browser-warning': 'true',
+                },
+            });
+
+            console.log('📡 Response status:', response.status);
+
+            if (!response.ok) {
+                return { status: false, kiosk_passcode: null };
+            }
+
+            const data = await response.json();
+            console.log('📥 Kiosk Passcode response:', data);
+
+            return data;
+        } catch (error) {
+            console.error('❌ Get kiosk passcode error:', error);
+            return { status: false, kiosk_passcode: null };
         }
     }
 

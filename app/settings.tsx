@@ -14,12 +14,18 @@ import {
     ActivityIndicator,
     RefreshControl,
     Alert,
+    Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { checkServerHealth, getServerConfig } from '../services/serverHealthService';
-import { config, updateBaseUrl, getRelayUrl } from '../constants/config';
+import {
+    checkServerHealth,
+    checkPythonHealth,
+    checkLaravelHealth,
+    getServerConfig
+} from '../services/serverHealthService';
+import { config, updateBaseUrl } from '../constants/config';
 import { unlockDoor } from '../services/relayService';
 
 const STORAGE_KEY_API_URL = '@kiosk_api_url';
@@ -28,8 +34,19 @@ export default function SettingsScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [serverConfig, setServerConfig] = useState<any>(null);
-    const [serverStatus, setServerStatus] = useState<any>(null);
-    const [checkingStatus, setCheckingStatus] = useState(false);
+
+    // Status states
+    const [relayStatus, setRelayStatus] = useState<any>(null);
+    const [pythonStatus, setPythonStatus] = useState<any>(null);
+    const [laravelStatus, setLaravelStatus] = useState<any>(null);
+
+    const [checkingStatus, setCheckingStatus] = useState({
+        relay: false,
+        python: false,
+        laravel: false,
+        all: false
+    });
+
     const [testingUnlock, setTestingUnlock] = useState(false);
 
     // API URL state
@@ -51,8 +68,11 @@ export default function SettingsScreen() {
                 updateBaseUrl(savedUrl);
             }
 
-            // Fetch server config
-            await fetchServerConfig();
+            // Fetch initial config and check all
+            await Promise.all([
+                fetchServerConfig(),
+                handleCheckAll()
+            ]);
         } catch (error) {
             console.error('Failed to load settings:', error);
         } finally {
@@ -64,88 +84,86 @@ export default function SettingsScreen() {
         try {
             const configData = await getServerConfig();
             setServerConfig(configData);
-
-            // Also check status
-            const status = await checkServerHealth();
-            setServerStatus(status);
         } catch (error) {
             console.error('Failed to fetch server config:', error);
             setServerConfig(null);
-            setServerStatus({ online: false, message: 'Failed to connect' });
         }
     };
 
     const handleRefresh = async () => {
         setRefreshing(true);
-        await fetchServerConfig();
+        await Promise.all([
+            fetchServerConfig(),
+            handleCheckAll()
+        ]);
         setRefreshing(false);
     };
 
     const handleSaveUrl = async () => {
         try {
-            // Validate URL
             if (!tempUrl.startsWith('http://') && !tempUrl.startsWith('https://')) {
                 Alert.alert('Invalid URL', 'URL must start with http:// or https://');
                 return;
             }
 
-            // Save to storage
             await AsyncStorage.setItem(STORAGE_KEY_API_URL, tempUrl);
             setApiUrl(tempUrl);
             updateBaseUrl(tempUrl);
             setIsEditingUrl(false);
 
             Alert.alert('Success', 'API URL updated successfully');
-
-            // Refresh server config with new URL
             await fetchServerConfig();
+            await checkRelay(); // Check new URL
         } catch (error) {
             Alert.alert('Error', 'Failed to save API URL');
             console.error(error);
         }
     };
 
-    const handleCheckStatus = async () => {
-        setCheckingStatus(true);
+    const checkRelay = async () => {
+        setCheckingStatus(prev => ({ ...prev, relay: true }));
         const status = await checkServerHealth();
-        setServerStatus(status);
-        setCheckingStatus(false);
+        setRelayStatus(status);
+        setCheckingStatus(prev => ({ ...prev, relay: false }));
+        return status;
+    };
 
-        if (status.online) {
-            Alert.alert('✅ Server Online', 'Relay server is running and reachable');
-        } else {
-            Alert.alert('❌ Server Offline', status.message || 'Cannot reach relay server');
-        }
+    const checkPython = async () => {
+        setCheckingStatus(prev => ({ ...prev, python: true }));
+        const status = await checkPythonHealth();
+        setPythonStatus(status);
+        setCheckingStatus(prev => ({ ...prev, python: false }));
+        return status;
+    };
+
+    const checkLaravel = async () => {
+        setCheckingStatus(prev => ({ ...prev, laravel: true }));
+        const status = await checkLaravelHealth();
+        setLaravelStatus(status);
+        setCheckingStatus(prev => ({ ...prev, laravel: false }));
+        return status;
+    };
+
+    const handleCheckAll = async () => {
+        setCheckingStatus(prev => ({ ...prev, all: true }));
+        await Promise.all([
+            checkRelay(),
+            checkPython(),
+            checkLaravel()
+        ]);
+        setCheckingStatus(prev => ({ ...prev, all: false }));
     };
 
     const handleTestUnlock = async () => {
         setTestingUnlock(true);
-
         try {
-            console.log('🔓 Testing relay unlock...');
             const result = await unlockDoor();
-
             setTestingUnlock(false);
-
             if (result.success) {
-                Alert.alert(
-                    '🔓 Success!',
-                    'Door unlocked successfully! The relay should be ON for 3 seconds.\n\nCheck the hardware - the relay should have turned ON briefly.',
-                    [
-                        {
-                            text: 'OK',
-                            onPress: () => {
-                                // Refresh server status
-                                handleCheckStatus();
-                            }
-                        }
-                    ]
-                );
+                Alert.alert('🔓 Success!', 'Door unlocked successfully!');
+                await checkRelay();
             } else {
-                Alert.alert(
-                    '❌ Unlock Failed',
-                    result.error || result.message || 'Failed to unlock door.\n\nPossible issues:\n• Relay hardware not connected\n• Server not communicating with relay\n• Network issue'
-                );
+                Alert.alert('❌ Unlock Failed', result.error || 'Failed to unlock door');
             }
         } catch (error: any) {
             setTestingUnlock(false);
@@ -186,105 +204,64 @@ export default function SettingsScreen() {
                     <Text style={styles.subtitle}>Manage kiosk configuration</Text>
                 </View>
 
-                {/* API URL Configuration */}
+                {/* Server Connectivity Section */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>API Configuration</Text>
-
-                    <View style={styles.card}>
-                        <Text style={styles.label}>Relay Server URL</Text>
-                        <View style={styles.urlContainer}>
-                            <TextInput
-                                style={[styles.urlInput, !isEditingUrl && styles.urlInputDisabled]}
-                                value={isEditingUrl ? tempUrl : apiUrl}
-                                onChangeText={setTempUrl}
-                                editable={isEditingUrl}
-                                placeholder="http://localhost:3000"
-                                placeholderTextColor="#666"
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                            />
-                            {!isEditingUrl ? (
-                                <TouchableOpacity
-                                    style={styles.editButton}
-                                    onPress={() => {
-                                        setIsEditingUrl(true);
-                                        setTempUrl(apiUrl);
-                                    }}
-                                >
-                                    <Text style={styles.editIcon}>✏️</Text>
-                                </TouchableOpacity>
+                    <View style={styles.sectionHeaderRow}>
+                        <Text style={styles.sectionTitle}>Server Connections</Text>
+                        <TouchableOpacity
+                            style={[styles.checkAllButton, checkingStatus.all && styles.buttonDisabled]}
+                            onPress={handleCheckAll}
+                            disabled={checkingStatus.all}
+                        >
+                            {checkingStatus.all ? (
+                                <ActivityIndicator size="small" color="#fff" />
                             ) : (
-                                <View style={styles.editActions}>
-                                    <TouchableOpacity
-                                        style={styles.saveButton}
-                                        onPress={handleSaveUrl}
-                                    >
-                                        <Text style={styles.saveButtonText}>Save</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={styles.cancelButton}
-                                        onPress={() => {
-                                            setIsEditingUrl(false);
-                                            setTempUrl(apiUrl);
-                                        }}
-                                    >
-                                        <Text style={styles.cancelButtonText}>Cancel</Text>
-                                    </TouchableOpacity>
-                                </View>
+                                <Text style={styles.checkAllButtonText}>Check All Servers</Text>
                             )}
-                        </View>
-                        <Text style={styles.hint}>
-                            💡 Server must run on this same device (localhost:3000)
-                        </Text>
+                        </TouchableOpacity>
                     </View>
-                </View>
 
-                {/* Server Status */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Server Status</Text>
+                    <View style={styles.connectivityCard}>
+                        {/* Relay Server */}
+                        <ServerUrlItem
+                            label="Relay Server (Local)"
+                            url={apiUrl}
+                            status={relayStatus}
+                            isChecking={checkingStatus.relay}
+                            onCheck={checkRelay}
+                            isEditable
+                            onEdit={() => setIsEditingUrl(true)}
+                        />
 
-                    <View style={styles.card}>
-                        <View style={styles.statusRow}>
-                            <View style={styles.statusInfo}>
-                                <Text style={styles.statusLabel}>Connection Status</Text>
-                                <View style={styles.statusBadge}>
-                                    <View style={[
-                                        styles.statusDot,
-                                        { backgroundColor: serverStatus?.online ? '#4CAF50' : '#F44336' }
-                                    ]} />
-                                    <Text style={[
-                                        styles.statusText,
-                                        { color: serverStatus?.online ? '#4CAF50' : '#F44336' }
-                                    ]}>
-                                        {serverStatus?.online ? 'Online' : 'Offline'}
-                                    </Text>
-                                </View>
-                            </View>
-                            <TouchableOpacity
-                                style={styles.checkButton}
-                                onPress={handleCheckStatus}
-                                disabled={checkingStatus}
-                            >
-                                {checkingStatus ? (
-                                    <ActivityIndicator size="small" color="#fff" />
-                                ) : (
-                                    <Text style={styles.checkButtonText}>Check</Text>
-                                )}
-                            </TouchableOpacity>
-                        </View>
+                        {/* Python API */}
+                        <ServerUrlItem
+                            label="Python Face API"
+                            url={config.python.baseUrl}
+                            status={pythonStatus}
+                            isChecking={checkingStatus.python}
+                            onCheck={checkPython}
+                        />
+
+                        {/* Laravel API */}
+                        <ServerUrlItem
+                            label="Laravel Backend API"
+                            url={config.laravel.baseUrl}
+                            status={laravelStatus}
+                            isChecking={checkingStatus.laravel}
+                            onCheck={checkLaravel}
+                            isLast
+                        />
                     </View>
                 </View>
 
                 {/* Test Relay Hardware */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Test Relay</Text>
-
+                    <Text style={styles.sectionTitle}>Hardware Testing</Text>
                     <View style={styles.card}>
-                        {/* Test Unlock Button */}
                         <TouchableOpacity
-                            style={[styles.testUnlockButton, (testingUnlock || !serverStatus?.online) && styles.testUnlockButtonDisabled]}
+                            style={[styles.testUnlockButton, (testingUnlock || !relayStatus?.online) && styles.testUnlockButtonDisabled]}
                             onPress={handleTestUnlock}
-                            disabled={testingUnlock || !serverStatus?.online}
+                            disabled={testingUnlock || !relayStatus?.online}
                         >
                             {testingUnlock ? (
                                 <>
@@ -299,85 +276,131 @@ export default function SettingsScreen() {
                             )}
                         </TouchableOpacity>
 
-                        {!serverStatus?.online && (
+                        {!relayStatus?.online && (
                             <Text style={styles.testUnlockHint}>
-                                ⚠️ Server must be online to test unlock
+                                ⚠️ Relay must be online to test unlock
                             </Text>
                         )}
-
-                        <Text style={styles.testDescription}>
-                            This will trigger the relay to unlock for 3 seconds. Watch the physical relay hardware to confirm it works.
-                        </Text>
                     </View>
                 </View>
 
-                {/* Server Configuration (Read-only) */}
+                {/* Relay Config Details (Read-only) */}
                 {serverConfig && serverConfig.success && (
                     <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Server Configuration</Text>
-
+                        <Text style={styles.sectionTitle}>Relay Details</Text>
                         <View style={styles.card}>
-                            <ConfigItem
-                                label="Device ID"
-                                value={serverConfig.config?.device_id || 'N/A'}
-                            />
-                            <ConfigItem
-                                label="Relay IP"
-                                value={serverConfig.config?.local_ip || 'N/A'}
-                            />
-                            <ConfigItem
-                                label="Protocol Version"
-                                value={serverConfig.config?.version || 'N/A'}
-                            />
-                            <ConfigItem
-                                label="Local Key Configured"
-                                value={serverConfig.config?.local_key_configured ? 'Yes ✅' : 'No ❌'}
-                            />
-                            <ConfigItem
-                                label="Server Port"
-                                value={serverConfig.server?.port?.toString() || 'N/A'}
-                            />
-                            <ConfigItem
-                                label="Unlock Duration"
-                                value={`${serverConfig.server?.unlock_duration || 0}ms`}
-                                isLast
-                            />
+                            <ConfigItem label="Device ID" value={serverConfig.config?.device_id || 'N/A'} />
+                            <ConfigItem label="Relay IP" value={serverConfig.config?.local_ip || 'N/A'} />
+                            <ConfigItem label="Version" value={serverConfig.config?.version || 'N/A'} />
+                            <ConfigItem label="Status" value={serverConfig.config?.local_key_configured ? 'Configured ✅' : 'Missing Key ❌'} />
+                            <ConfigItem label="Port" value={serverConfig.server?.port?.toString() || 'N/A'} />
+                            <ConfigItem label="Duration" value={`${serverConfig.server?.unlock_duration || 0}ms`} isLast />
                         </View>
                     </View>
                 )}
 
-                {/* Actions */}
-                <View style={styles.section}>
-                    <TouchableOpacity
-                        style={styles.instructionsButton}
-                        onPress={() => router.push('/setup')}
-                    >
-                        <Text style={styles.instructionsIcon}>📖</Text>
-                        <Text style={styles.instructionsButtonText}>
-                            View Setup Instructions
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Info */}
-                <View style={styles.infoBox}>
-                    <Text style={styles.infoText}>
-                        💡 Pull down to refresh server configuration
-                    </Text>
-                </View>
+                <TouchableOpacity
+                    style={styles.instructionsButton}
+                    onPress={() => router.push('/setup')}
+                >
+                    <Text style={styles.instructionsButtonText}>📖 View Setup Instructions</Text>
+                </TouchableOpacity>
 
                 <View style={styles.spacer} />
             </ScrollView>
+
+            {/* Modal for editing Relay URL */}
+            <Modal
+                visible={isEditingUrl}
+                transparent
+                animationType="fade"
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Update Relay URL</Text>
+                        <TextInput
+                            style={styles.modalInput}
+                            value={tempUrl}
+                            onChangeText={setTempUrl}
+                            placeholder="http://localhost:3000"
+                            placeholderTextColor="#666"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                        />
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity style={styles.saveButton} onPress={handleSaveUrl}>
+                                <Text style={styles.saveButtonText}>Save URL</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.cancelButton} onPress={() => setIsEditingUrl(false)}>
+                                <Text style={styles.cancelButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
 
-// Config Item Component
-function ConfigItem({ label, value, isLast = false }: {
-    label: string;
-    value: string;
-    isLast?: boolean;
-}) {
+// Server URL Item Component
+function ServerUrlItem({
+    label,
+    url,
+    status,
+    isChecking,
+    onCheck,
+    isEditable = false,
+    onEdit,
+    isLast = false
+}: any) {
+    return (
+        <View style={[styles.urlItem, !isLast && styles.urlItemBorder]}>
+            <View style={styles.urlItemHeader}>
+                <Text style={styles.urlItemLabel}>{label}</Text>
+                <View style={styles.statusBadge}>
+                    <View style={[
+                        styles.statusDot,
+                        { backgroundColor: status ? (status.online ? '#4CAF50' : '#F44336') : '#555' }
+                    ]} />
+                    <Text style={[
+                        styles.statusText,
+                        { color: status ? (status.online ? '#4CAF50' : '#F44336') : '#aaa' }
+                    ]}>
+                        {status ? (status.online ? 'Online' : 'Offline') : 'Checking...'}
+                    </Text>
+                </View>
+            </View>
+
+            {status && !status.online && status.error && (
+                <Text style={styles.errorText}>Error: {status.error}</Text>
+            )}
+
+            <View style={styles.urlRow}>
+                <View style={styles.urlDisplay}>
+                    <Text style={styles.urlText} numberOfLines={1}>{url}</Text>
+                    {isEditable && (
+                        <TouchableOpacity onPress={onEdit} style={styles.miniEditButton}>
+                            <Text style={{ fontSize: 12 }}>✏️</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+                <TouchableOpacity
+                    style={[styles.miniCheckButton, isChecking && styles.buttonDisabled]}
+                    onPress={onCheck}
+                    disabled={isChecking}
+                >
+                    {isChecking ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                        <Text style={styles.miniCheckButtonText}>Check</Text>
+                    )}
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+}
+
+function ConfigItem({ label, value, isLast = false }: { label: string; value: string; isLast?: boolean; }) {
     return (
         <View style={[styles.configItem, !isLast && styles.configItemBorder]}>
             <Text style={styles.configLabel}>{label}</Text>
@@ -389,7 +412,7 @@ function ConfigItem({ label, value, isLast = false }: {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#1a1a1a',
+        backgroundColor: '#0f0f0f',
     },
     scrollView: {
         flex: 1,
@@ -408,228 +431,270 @@ const styles = StyleSheet.create({
         marginTop: 12,
     },
     header: {
-        marginBottom: 24,
+        marginBottom: 30,
     },
     backButton: {
         marginBottom: 16,
     },
     backText: {
         color: '#4CAF50',
-        fontSize: 16,
+        fontSize: 18,
+        fontWeight: '600',
     },
     title: {
-        fontSize: 32,
+        fontSize: 36,
         fontWeight: 'bold',
         color: '#fff',
-        marginBottom: 8,
+        letterSpacing: 0.5,
     },
     subtitle: {
         fontSize: 16,
-        color: '#aaa',
+        color: '#888',
+        marginTop: 4,
     },
     section: {
-        marginBottom: 24,
+        marginBottom: 32,
     },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#fff',
-        marginBottom: 12,
-    },
-    card: {
-        backgroundColor: '#252525',
-        borderRadius: 12,
-        padding: 16,
-    },
-    label: {
-        fontSize: 14,
-        color: '#aaa',
-        marginBottom: 8,
-    },
-    urlContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    urlInput: {
-        flex: 1,
-        backgroundColor: '#1a1a1a',
-        borderRadius: 8,
-        padding: 12,
-        color: '#fff',
-        fontSize: 14,
-        borderWidth: 1,
-        borderColor: '#4CAF50',
-    },
-    urlInputDisabled: {
-        borderColor: '#333',
-        color: '#aaa',
-    },
-    editButton: {
-        width: 44,
-        height: 44,
-        backgroundColor: '#333',
-        borderRadius: 8,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    editIcon: {
-        fontSize: 20,
-    },
-    editActions: {
-        flexDirection: 'row',
-        gap: 8,
-    },
-    saveButton: {
-        backgroundColor: '#4CAF50',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 8,
-    },
-    saveButtonText: {
-        color: '#fff',
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    cancelButton: {
-        backgroundColor: '#666',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 8,
-    },
-    cancelButtonText: {
-        color: '#fff',
-        fontSize: 14,
-    },
-    hint: {
-        fontSize: 12,
-        color: '#888',
-        marginTop: 8,
-        fontStyle: 'italic',
-    },
-    statusRow: {
+    sectionHeaderRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: 16,
     },
-    statusInfo: {
-        flex: 1,
+    sectionTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#fff',
     },
-    statusLabel: {
-        fontSize: 14,
-        color: '#aaa',
-        marginBottom: 8,
+    checkAllButton: {
+        backgroundColor: '#1f1f1f',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#333',
+    },
+    checkAllButtonText: {
+        color: '#4CAF50',
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    connectivityCard: {
+        backgroundColor: '#1a1a1a',
+        borderRadius: 16,
+        padding: 4,
+        borderWidth: 1,
+        borderColor: '#222',
+    },
+    card: {
+        backgroundColor: '#1a1a1a',
+        borderRadius: 16,
+        padding: 20,
+        borderWidth: 1,
+        borderColor: '#222',
+    },
+    urlItem: {
+        padding: 16,
+    },
+    urlItemBorder: {
+        borderBottomWidth: 1,
+        borderBottomColor: '#222',
+    },
+    urlItemHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    errorText: {
+        fontSize: 12,
+        color: '#F44336',
+        marginBottom: 10,
+        fontStyle: 'italic',
+    },
+    urlItemLabel: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#eee',
     },
     statusBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 6,
+        backgroundColor: '#000',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
     },
     statusDot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
     },
     statusText: {
-        fontSize: 16,
-        fontWeight: '600',
+        fontSize: 12,
+        fontWeight: 'bold',
     },
-    checkButton: {
-        backgroundColor: '#4CAF50',
-        paddingHorizontal: 20,
+    urlRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    urlDisplay: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#0a0a0a',
+        paddingHorizontal: 12,
         paddingVertical: 10,
         borderRadius: 8,
-        minWidth: 80,
+        borderWidth: 1,
+        borderColor: '#333',
+    },
+    urlText: {
+        flex: 1,
+        color: '#666',
+        fontSize: 13,
+    },
+    miniEditButton: {
+        padding: 4,
+        marginLeft: 8,
+    },
+    miniCheckButton: {
+        backgroundColor: '#4CAF50',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 8,
+        minWidth: 70,
         alignItems: 'center',
     },
-    checkButtonText: {
+    miniCheckButtonText: {
         color: '#fff',
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '600',
+    },
+    buttonDisabled: {
+        opacity: 0.5,
     },
     testUnlockButton: {
         backgroundColor: '#FF9800',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 14,
-        borderRadius: 10,
+        padding: 18,
+        borderRadius: 12,
     },
     testUnlockButtonDisabled: {
-        backgroundColor: '#666',
+        backgroundColor: '#333',
         opacity: 0.5,
     },
     testUnlockIcon: {
-        fontSize: 20,
-        marginRight: 8,
+        fontSize: 22,
+        marginRight: 10,
     },
     testUnlockButtonText: {
         color: '#fff',
-        fontSize: 15,
-        fontWeight: '600',
+        fontSize: 16,
+        fontWeight: '700',
     },
     testUnlockHint: {
-        fontSize: 12,
-        color: '#FFA500',
-        textAlign: 'center',
-        marginTop: 8,
-        fontStyle: 'italic',
-    },
-    testDescription: {
         fontSize: 13,
         color: '#888',
         textAlign: 'center',
         marginTop: 12,
-        lineHeight: 18,
+        fontStyle: 'italic',
     },
     configItem: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        paddingVertical: 12,
+        paddingVertical: 14,
     },
     configItemBorder: {
         borderBottomWidth: 1,
         borderBottomColor: '#333',
     },
     configLabel: {
-        fontSize: 14,
-        color: '#aaa',
+        fontSize: 15,
+        color: '#888',
     },
     configValue: {
-        fontSize: 14,
+        fontSize: 15,
         color: '#fff',
-        fontWeight: '500',
+        fontWeight: '600',
     },
     instructionsButton: {
-        backgroundColor: '#4CAF50',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
+        backgroundColor: '#1f1f1f',
+        padding: 18,
         borderRadius: 12,
-        gap: 12,
-    },
-    instructionsIcon: {
-        fontSize: 24,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#333',
+        marginTop: 20,
     },
     instructionsButtonText: {
         color: '#fff',
         fontSize: 16,
         fontWeight: '600',
     },
-    infoBox: {
-        backgroundColor: 'rgba(76, 175, 80, 0.1)',
-        borderRadius: 8,
-        padding: 12,
-        marginTop: 16,
-    },
-    infoText: {
-        color: '#4CAF50',
-        fontSize: 13,
-        textAlign: 'center',
-    },
     spacer: {
-        height: 40,
+        height: 60,
+    },
+    // Modal
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        justifyContent: 'center',
+        padding: 20,
+    },
+    modalContent: {
+        backgroundColor: '#1a1a1a',
+        borderRadius: 20,
+        padding: 24,
+        borderWidth: 1,
+        borderColor: '#333',
+    },
+    modalTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: '#fff',
+        marginBottom: 20,
+    },
+    modalInput: {
+        backgroundColor: '#0a0a0a',
+        borderRadius: 12,
+        padding: 16,
+        color: '#fff',
+        fontSize: 16,
+        borderWidth: 1,
+        borderColor: '#4CAF50',
+        marginBottom: 24,
+    },
+    modalActions: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    saveButton: {
+        flex: 1,
+        backgroundColor: '#4CAF50',
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    saveButtonText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
+    cancelButton: {
+        flex: 1,
+        backgroundColor: '#333',
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    cancelButtonText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 16,
     },
 });

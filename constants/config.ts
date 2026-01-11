@@ -12,14 +12,18 @@ export const config = {
         loginEndpoint: '/api/auth/login',
         otpVerifyEndpoint: '/api/auth/otp-verify',
         gymListEndpoint: '/api/gym/list',
+        memberListEndpoint: '/api/gym/members/list',
+        kioskPasscodeEndpoint: '/api/user/kiosk-passcode',
         timeout: 10000, // 10 seconds
     },
 
     // Python Face Recognition API Configuration
     python: {
+        // baseUrl: 'https://emil-prohibitive-stoically.ngrok-free.dev',
         baseUrl: 'https://pythonapi.paylapfitness.com',
         verifyFaceEndpoint: '/api/verify-face',
-        apiKey: 'paylap_kiosk_2026',
+        syncMembersEndpoint: '/api/sync-members',
+        cachedMembersEndpoint: '/api/debug/cache',
         timeout: 10000, // 10 seconds
     },
 

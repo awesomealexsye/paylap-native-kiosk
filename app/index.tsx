@@ -12,22 +12,21 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { unlockDoor } from '../services/relayService';
-import { checkServerHealth } from '../services/serverHealthService';
-import ServerOfflineModal from '../components/ServerOfflineModal';
 import { useAuth } from '../contexts/AuthContext';
 import faceVerificationService from '../services/faceVerificationService';
+import { PasscodeModal } from '../components/PasscodeModal';
 
 const { width } = Dimensions.get('window');
 
 type ModalState = 'idle' | 'scanning' | 'unlocking' | 'success' | 'error';
 
 export default function KioskScreen() {
-    const { isLoading, isAuthenticated, selectedGym } = useAuth();
+    const { isLoading, isAuthenticated, selectedGym, token } = useAuth();
     const [permission, requestPermission] = useCameraPermissions();
     const [modalState, setModalState] = useState<ModalState>('idle');
-    const [serverOfflineVisible, setServerOfflineVisible] = useState(false);
     const [verificationResult, setVerificationResult] = useState<any>(null);
     const [showModal, setShowModal] = useState(false);
+    const [showPasscodeModal, setShowPasscodeModal] = useState(false);
     const cameraRef = useRef<CameraView>(null);
 
     // Check authentication on mount
@@ -36,21 +35,6 @@ export default function KioskScreen() {
             router.replace('/login');
         }
     }, [isLoading, isAuthenticated]);
-
-    // Check server health on mount
-    useEffect(() => {
-        if (isAuthenticated) {
-            checkServer();
-        }
-    }, [isAuthenticated]);
-
-    const checkServer = async () => {
-        const health = await checkServerHealth();
-        if (!health.online) {
-            console.log('⚠️  Server is offline');
-            setTimeout(() => setServerOfflineVisible(true), 1000);
-        }
-    };
 
     if (!permission) return <View />;
 
@@ -81,6 +65,11 @@ export default function KioskScreen() {
     const handleCaptureFace = async () => {
         if (!cameraRef.current) return;
 
+        if (!selectedGym || !token) {
+            console.error('❌ Missing Gym ID or Auth Token');
+            return;
+        }
+
         // Start scanning
         setModalState('scanning');
         setShowModal(true);
@@ -99,8 +88,8 @@ export default function KioskScreen() {
                 return;
             }
 
-            // 2. Verify with Python API
-            const result = await faceVerificationService.verifyFace(photo.uri);
+            // 2. Verify with Python API (Passing gym_id and token)
+            const result = await faceVerificationService.verifyFace(photo.uri, selectedGym.id, token);
             setVerificationResult(result);
 
             if (result.access_granted && result.success) {
@@ -144,6 +133,19 @@ export default function KioskScreen() {
                 setModalState('idle');
             }, 3000);
         }
+    };
+
+    const handleActionPress = () => {
+        if (!isAuthenticated) {
+            router.push('/login');
+            return;
+        }
+        setShowPasscodeModal(true);
+    };
+
+    const handlePasscodeSuccess = () => {
+        setShowPasscodeModal(false);
+        router.push('/dashboard');
     };
 
     const renderModalContent = () => {
@@ -212,7 +214,7 @@ export default function KioskScreen() {
                     </View>
                     <TouchableOpacity
                         style={styles.actionButton}
-                        onPress={() => router.push(isAuthenticated ? '/dashboard' : '/login')}
+                        onPress={handleActionPress}
                     >
                         <Text style={styles.actionButtonIcon}>
                             {isAuthenticated ? '🏠' : '🔐'}
@@ -247,12 +249,7 @@ export default function KioskScreen() {
                 </TouchableOpacity>
             </View>
 
-            {/* Server Offline Modal */}
-            <ServerOfflineModal
-                visible={serverOfflineVisible}
-                onViewInstructions={() => router.push('/setup')}
-                onClose={() => setServerOfflineVisible(false)}
-            />
+
 
             {/* Unified Verification Modal */}
             <Modal
@@ -266,6 +263,12 @@ export default function KioskScreen() {
                     </View>
                 </View>
             </Modal>
+
+            <PasscodeModal
+                visible={showPasscodeModal}
+                onClose={() => setShowPasscodeModal(false)}
+                onSuccess={handlePasscodeSuccess}
+            />
         </SafeAreaView>
     );
 }

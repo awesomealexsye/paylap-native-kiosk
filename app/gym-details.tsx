@@ -149,16 +149,17 @@ export default function GymDetailsScreen() {
                 <View style={styles.statsContainer}>
                     <Text style={styles.sectionTitle}>Statistics</Text>
                     <View style={styles.statsGrid}>
-                        <View style={styles.statCard}>
+                        <TouchableOpacity
+                            style={styles.statCard}
+                            onPress={() => router.push({
+                                pathname: '/gym-members',
+                                params: { gymId: gym.id }
+                            })}
+                        >
                             <Text style={styles.statIcon}>👥</Text>
                             <Text style={styles.statValue}>{gym.members_count || 0}</Text>
                             <Text style={styles.statLabel}>Members</Text>
-                        </View>
-                        <View style={styles.statCard}>
-                            <Text style={styles.statIcon}>💪</Text>
-                            <Text style={styles.statValue}>{gym.trainers_count || 0}</Text>
-                            <Text style={styles.statLabel}>Trainers</Text>
-                        </View>
+                        </TouchableOpacity>
                     </View>
                 </View>
 

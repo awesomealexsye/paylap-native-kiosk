@@ -31,6 +31,38 @@ export interface Gym {
     gst?: string;
 }
 
+// Gym Member interface
+export interface GymMember {
+    id: number;
+    gym_id: number;
+    member_code: string;
+    full_name: string;
+    phone_number: string;
+    email: string | null;
+    address: string | null;
+    profile_photo_path: string | null;
+    profile_photo_url: string | null;
+    status: 'active' | 'inactive';
+    joining_date: string;
+    subscription?: {
+        id: number;
+        start_date: string | null;
+        end_date: string | null;
+        remaining_days: number | null;
+        payment_status: string;
+        amount_due: number;
+        total_subscription_amount: number;
+        amount_paid: number;
+    } | null;
+}
+
+// Member List API
+export interface MemberListResponse {
+    status: boolean;
+    message: string;
+    data?: GymMember[];
+}
+
 // Login API
 export interface LoginRequest {
     mobile: string;
@@ -72,6 +104,12 @@ export interface AuthState {
     user: User | null;
     token: string | null;
     selectedGym: Gym | null;
+}
+
+// Kiosk Passcode Response
+export interface KioskPasscodeResponse {
+    status: boolean;
+    kiosk_passcode: string | null;
 }
 
 // Storage Keys
