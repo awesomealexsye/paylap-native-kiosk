@@ -15,6 +15,8 @@ import {
     RefreshControl,
     Alert,
     Modal,
+    KeyboardAvoidingView,
+    Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -25,8 +27,9 @@ import {
     checkLaravelHealth,
     getServerConfig
 } from '../services/serverHealthService';
-import { config, updateBaseUrl } from '../constants/config';
+import { config, updateBaseUrl, DEFAULT_RELAY_CONFIG, DEFAULT_RELAY_URL } from '../constants/config';
 import { unlockDoor } from '../services/relayService';
+import { updateRelayConfig } from '../services/relayConfigService';
 
 const STORAGE_KEY_API_URL = '@kiosk_api_url';
 
@@ -50,9 +53,18 @@ export default function SettingsScreen() {
     const [testingUnlock, setTestingUnlock] = useState(false);
 
     // API URL state
-    const [apiUrl, setApiUrl] = useState('http://localhost:3000');
+    const [apiUrl, setApiUrl] = useState(DEFAULT_RELAY_URL);
     const [isEditingUrl, setIsEditingUrl] = useState(false);
-    const [tempUrl, setTempUrl] = useState('http://localhost:3000');
+    const [tempUrl, setTempUrl] = useState(DEFAULT_RELAY_URL);
+
+    // Relay config edit states
+    const [isEditingConfig, setIsEditingConfig] = useState(false);
+    const [editableConfig, setEditableConfig] = useState({
+        device_id: '',
+        local_key: '',
+        local_ip: ''
+    });
+    const [updatingConfig, setUpdatingConfig] = useState(false);
 
     useEffect(() => {
         loadSettings();
@@ -120,6 +132,23 @@ export default function SettingsScreen() {
         }
     };
 
+    const handleResetUrl = async () => {
+        try {
+            setTempUrl(DEFAULT_RELAY_URL);
+            await AsyncStorage.setItem(STORAGE_KEY_API_URL, DEFAULT_RELAY_URL);
+            setApiUrl(DEFAULT_RELAY_URL);
+            updateBaseUrl(DEFAULT_RELAY_URL);
+            setIsEditingUrl(false);
+
+            Alert.alert('✅ Reset Complete', 'Relay URL restored to default');
+            await fetchServerConfig();
+            await checkRelay();
+        } catch (error) {
+            Alert.alert('Error', 'Failed to reset URL');
+            console.error(error);
+        }
+    };
+
     const checkRelay = async () => {
         setCheckingStatus(prev => ({ ...prev, relay: true }));
         const status = await checkServerHealth();
@@ -171,6 +200,73 @@ export default function SettingsScreen() {
         }
     };
 
+    const handleEditConfig = () => {
+        if (serverConfig?.config) {
+            setEditableConfig({
+                device_id: serverConfig.config.device_id || '',
+                local_key: serverConfig.config.local_key || '',
+                local_ip: serverConfig.config.local_ip || ''
+            });
+            setIsEditingConfig(true);
+        }
+    };
+
+    const handleSaveConfig = async () => {
+        setUpdatingConfig(true);
+        try {
+            const result = await updateRelayConfig(editableConfig);
+
+            if (result.success) {
+                Alert.alert('✅ Success', 'Relay configuration updated successfully!');
+                setIsEditingConfig(false);
+                // Refresh config and check relay status
+                await fetchServerConfig();
+                setTimeout(() => checkRelay(), 2000); // Check after reconnection
+            } else {
+                const errorMsg = result.errors?.join('\n') || result.error || 'Failed to update config';
+                Alert.alert('❌ Update Failed', errorMsg);
+            }
+        } catch (error: any) {
+            Alert.alert('❌ Error', error.message || 'Failed to update configuration');
+        } finally {
+            setUpdatingConfig(false);
+        }
+    };
+
+    const handleResetToDefault = () => {
+        Alert.alert(
+            '🔄 Reset to Default',
+            'This will restore factory default relay settings. Continue?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Reset',
+                    style: 'destructive',
+                    onPress: async () => {
+                        setUpdatingConfig(true);
+                        try {
+                            const result = await updateRelayConfig(DEFAULT_RELAY_CONFIG);
+
+                            if (result.success) {
+                                Alert.alert('✅ Reset Complete', 'Relay settings restored to factory defaults');
+                                setIsEditingConfig(false);
+                                await fetchServerConfig();
+                                setTimeout(() => checkRelay(), 2000);
+                            } else {
+                                const errorMsg = result.errors?.join('\n') || result.error || 'Failed to reset config';
+                                Alert.alert('❌ Reset Failed', errorMsg);
+                            }
+                        } catch (error: any) {
+                            Alert.alert('❌ Error', error.message || 'Failed to reset configuration');
+                        } finally {
+                            setUpdatingConfig(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     if (loading) {
         return (
             <SafeAreaView style={styles.container}>
@@ -184,130 +280,205 @@ export default function SettingsScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <ScrollView
-                style={styles.scrollView}
-                contentContainerStyle={styles.content}
-                refreshControl={
-                    <RefreshControl
-                        refreshing={refreshing}
-                        onRefresh={handleRefresh}
-                        tintColor="#4CAF50"
-                    />
-                }
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
             >
-                {/* Header */}
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                        <Text style={styles.backText}>← Back</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.title}>Settings</Text>
-                    <Text style={styles.subtitle}>Manage kiosk configuration</Text>
-                </View>
-
-                {/* Server Connectivity Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeaderRow}>
-                        <Text style={styles.sectionTitle}>Server Connections</Text>
-                        <TouchableOpacity
-                            style={[styles.checkAllButton, checkingStatus.all && styles.buttonDisabled]}
-                            onPress={handleCheckAll}
-                            disabled={checkingStatus.all}
-                        >
-                            {checkingStatus.all ? (
-                                <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                                <Text style={styles.checkAllButtonText}>Check All Servers</Text>
-                            )}
+                <ScrollView
+                    style={styles.scrollView}
+                    contentContainerStyle={styles.content}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={handleRefresh}
+                            tintColor="#4CAF50"
+                        />
+                    }
+                    keyboardShouldPersistTaps="handled"
+                >
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                            <Text style={styles.backText}>← Back</Text>
                         </TouchableOpacity>
+                        <Text style={styles.title}>Settings</Text>
+                        <Text style={styles.subtitle}>Manage kiosk configuration</Text>
                     </View>
 
-                    <View style={styles.connectivityCard}>
-                        {/* Relay Server */}
-                        <ServerUrlItem
-                            label="Relay Server (Local)"
-                            url={apiUrl}
-                            status={relayStatus}
-                            isChecking={checkingStatus.relay}
-                            onCheck={checkRelay}
-                            isEditable
-                            onEdit={() => setIsEditingUrl(true)}
-                        />
-
-                        {/* Python API */}
-                        <ServerUrlItem
-                            label="Python Face API"
-                            url={config.python.baseUrl}
-                            status={pythonStatus}
-                            isChecking={checkingStatus.python}
-                            onCheck={checkPython}
-                        />
-
-                        {/* Laravel API */}
-                        <ServerUrlItem
-                            label="Laravel Backend API"
-                            url={config.laravel.baseUrl}
-                            status={laravelStatus}
-                            isChecking={checkingStatus.laravel}
-                            onCheck={checkLaravel}
-                            isLast
-                        />
-                    </View>
-                </View>
-
-                {/* Test Relay Hardware */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Hardware Testing</Text>
-                    <View style={styles.card}>
-                        <TouchableOpacity
-                            style={[styles.testUnlockButton, (testingUnlock || !relayStatus?.online) && styles.testUnlockButtonDisabled]}
-                            onPress={handleTestUnlock}
-                            disabled={testingUnlock || !relayStatus?.online}
-                        >
-                            {testingUnlock ? (
-                                <>
-                                    <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
-                                    <Text style={styles.testUnlockButtonText}>Testing Unlock...</Text>
-                                </>
-                            ) : (
-                                <>
-                                    <Text style={styles.testUnlockIcon}>🔓</Text>
-                                    <Text style={styles.testUnlockButtonText}>Test Relay Hardware</Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
-
-                        {!relayStatus?.online && (
-                            <Text style={styles.testUnlockHint}>
-                                ⚠️ Relay must be online to test unlock
-                            </Text>
-                        )}
-                    </View>
-                </View>
-
-                {/* Relay Config Details (Read-only) */}
-                {serverConfig && serverConfig.success && (
+                    {/* Server Connectivity Section */}
                     <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Relay Details</Text>
-                        <View style={styles.card}>
-                            <ConfigItem label="Device ID" value={serverConfig.config?.device_id || 'N/A'} />
-                            <ConfigItem label="Relay IP" value={serverConfig.config?.local_ip || 'N/A'} />
-                            <ConfigItem label="Version" value={serverConfig.config?.version || 'N/A'} />
-                            <ConfigItem label="Status" value={serverConfig.config?.local_key_configured ? 'Configured ✅' : 'Missing Key ❌'} />
-                            <ConfigItem label="Port" value={serverConfig.server?.port?.toString() || 'N/A'} />
-                            <ConfigItem label="Duration" value={`${serverConfig.server?.unlock_duration || 0}ms`} isLast />
+                        <View style={styles.sectionHeaderRow}>
+                            <Text style={styles.sectionTitle}>Server Connections</Text>
+                            <TouchableOpacity
+                                style={[styles.checkAllButton, checkingStatus.all && styles.buttonDisabled]}
+                                onPress={handleCheckAll}
+                                disabled={checkingStatus.all}
+                            >
+                                {checkingStatus.all ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <Text style={styles.checkAllButtonText}>Check All Servers</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.connectivityCard}>
+                            {/* Relay Server */}
+                            <ServerUrlItem
+                                label="Relay Server (Local)"
+                                url={apiUrl}
+                                status={relayStatus}
+                                isChecking={checkingStatus.relay}
+                                onCheck={checkRelay}
+                                isEditable
+                                onEdit={() => setIsEditingUrl(true)}
+                            />
+
+                            {/* Python API */}
+                            <ServerUrlItem
+                                label="Python Face API"
+                                url={config.python.baseUrl}
+                                status={pythonStatus}
+                                isChecking={checkingStatus.python}
+                                onCheck={checkPython}
+                            />
+
+                            {/* Laravel API */}
+                            <ServerUrlItem
+                                label="Laravel Backend API"
+                                url={config.laravel.baseUrl}
+                                status={laravelStatus}
+                                isChecking={checkingStatus.laravel}
+                                onCheck={checkLaravel}
+                                isLast
+                            />
                         </View>
                     </View>
-                )}
 
-                <TouchableOpacity
-                    style={styles.instructionsButton}
-                    onPress={() => router.push('/setup')}
-                >
-                    <Text style={styles.instructionsButtonText}>📖 View Setup Instructions</Text>
-                </TouchableOpacity>
+                    {/* Test Relay Hardware */}
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Hardware Testing</Text>
+                        <View style={styles.card}>
+                            <TouchableOpacity
+                                style={[styles.testUnlockButton, (testingUnlock || !relayStatus?.online) && styles.testUnlockButtonDisabled]}
+                                onPress={handleTestUnlock}
+                                disabled={testingUnlock || !relayStatus?.online}
+                            >
+                                {testingUnlock ? (
+                                    <>
+                                        <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
+                                        <Text style={styles.testUnlockButtonText}>Testing Unlock...</Text>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Text style={styles.testUnlockIcon}>🔓</Text>
+                                        <Text style={styles.testUnlockButtonText}>Test Relay Hardware</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
 
-                <View style={styles.spacer} />
-            </ScrollView>
+                            {!relayStatus?.online && (
+                                <Text style={styles.testUnlockHint}>
+                                    ⚠️ Relay must be online to test unlock
+                                </Text>
+                            )}
+                        </View>
+                    </View>
+
+                    {/* Relay Config Details (Editable) */}
+                    {serverConfig && serverConfig.success && (
+                        <View style={styles.section}>
+                            <View style={styles.sectionHeaderRow}>
+                                <Text style={styles.sectionTitle}>Relay Configuration</Text>
+                                <TouchableOpacity
+                                    style={styles.editConfigButton}
+                                    onPress={isEditingConfig ? () => setIsEditingConfig(false) : handleEditConfig}
+                                >
+                                    <Text style={styles.editConfigButtonText}>
+                                        {isEditingConfig ? '❌ Cancel' : '✏️ Edit'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {isEditingConfig ? (
+                                <View style={styles.card}>
+                                    <View style={styles.editableConfigItem}>
+                                        <Text style={styles.configLabel}>Device ID</Text>
+                                        <TextInput
+                                            style={styles.configInput}
+                                            value={editableConfig.device_id}
+                                            onChangeText={(text) => setEditableConfig(prev => ({ ...prev, device_id: text }))}
+                                            placeholder="Device ID"
+                                            placeholderTextColor="#555"
+                                        />
+                                    </View>
+                                    <View style={styles.editableConfigItem}>
+                                        <Text style={styles.configLabel}>Local Key</Text>
+                                        <TextInput
+                                            style={styles.configInput}
+                                            value={editableConfig.local_key}
+                                            onChangeText={(text) => setEditableConfig(prev => ({ ...prev, local_key: text }))}
+                                            placeholder="Local Key"
+                                            placeholderTextColor="#555"
+                                            secureTextEntry
+                                        />
+                                    </View>
+                                    <View style={[styles.editableConfigItem, styles.lastConfigItem]}>
+                                        <Text style={styles.configLabel}>Local IP</Text>
+                                        <TextInput
+                                            style={styles.configInput}
+                                            value={editableConfig.local_ip}
+                                            onChangeText={(text) => setEditableConfig(prev => ({ ...prev, local_ip: text }))}
+                                            placeholder="192.168.0.127"
+                                            placeholderTextColor="#555"
+                                            keyboardType="numeric"
+                                        />
+                                    </View>
+
+                                    <View style={styles.configActions}>
+                                        <TouchableOpacity
+                                            style={[styles.resetButton, updatingConfig && styles.buttonDisabled]}
+                                            onPress={handleResetToDefault}
+                                            disabled={updatingConfig}
+                                        >
+                                            <Text style={styles.resetButtonText}>🔄 Reset to Default</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.saveConfigButton, updatingConfig && styles.buttonDisabled]}
+                                            onPress={handleSaveConfig}
+                                            disabled={updatingConfig}
+                                        >
+                                            {updatingConfig ? (
+                                                <ActivityIndicator size="small" color="#fff" />
+                                            ) : (
+                                                <Text style={styles.saveConfigButtonText}>💾 Save Changes</Text>
+                                            )}
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            ) : (
+                                <View style={styles.card}>
+                                    <ConfigItem label="Device ID" value={serverConfig.config?.device_id || 'N/A'} />
+                                    <ConfigItem label="Local Key" value={serverConfig.config?.local_key ? '***' + serverConfig.config.local_key.slice(-4) : 'N/A'} />
+                                    <ConfigItem label="Relay IP" value={serverConfig.config?.local_ip || 'N/A'} />
+                                    <ConfigItem label="Version" value={serverConfig.config?.version || 'N/A'} />
+                                    <ConfigItem label="Port" value={serverConfig.server?.port?.toString() || 'N/A'} />
+                                    <ConfigItem label="Duration" value={`${serverConfig.server?.unlock_duration || 0}ms`} isLast />
+                                </View>
+                            )}
+                        </View>
+                    )}
+
+                    <TouchableOpacity
+                        style={styles.instructionsButton}
+                        onPress={() => router.push('/setup')}
+                    >
+                        <Text style={styles.instructionsButtonText}>📖 View Setup Instructions</Text>
+                    </TouchableOpacity>
+
+                    <View style={styles.spacer} />
+                </ScrollView>
+            </KeyboardAvoidingView>
 
             {/* Modal for editing Relay URL */}
             <Modal
@@ -315,28 +486,34 @@ export default function SettingsScreen() {
                 transparent
                 animationType="fade"
             >
-                <View style={styles.modalOverlay}>
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.modalOverlay}
+                >
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Update Relay URL</Text>
                         <TextInput
                             style={styles.modalInput}
                             value={tempUrl}
                             onChangeText={setTempUrl}
-                            placeholder="http://localhost:3000"
+                            placeholder={DEFAULT_RELAY_URL}
                             placeholderTextColor="#666"
                             autoCapitalize="none"
                             autoCorrect={false}
                         />
                         <View style={styles.modalActions}>
-                            <TouchableOpacity style={styles.saveButton} onPress={handleSaveUrl}>
-                                <Text style={styles.saveButtonText}>Save URL</Text>
+                            <TouchableOpacity style={styles.resetUrlButton} onPress={handleResetUrl}>
+                                <Text style={styles.resetUrlButtonText}>🔄 Reset</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.cancelButton} onPress={() => setIsEditingUrl(false)}>
-                                <Text style={styles.cancelButtonText}>Cancel</Text>
+                            <TouchableOpacity style={styles.saveButton} onPress={handleSaveUrl}>
+                                <Text style={styles.saveButtonText}>Save</Text>
                             </TouchableOpacity>
                         </View>
+                        <TouchableOpacity style={styles.cancelButton} onPress={() => setIsEditingUrl(false)}>
+                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                        </TouchableOpacity>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
         </SafeAreaView>
     );
@@ -639,6 +816,66 @@ const styles = StyleSheet.create({
     spacer: {
         height: 60,
     },
+    editConfigButton: {
+        backgroundColor: '#1f1f1f',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#333',
+    },
+    editConfigButtonText: {
+        color: '#4CAF50',
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    editableConfigItem: {
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#333',
+    },
+    lastConfigItem: {
+        borderBottomWidth: 0,
+    },
+    configInput: {
+        backgroundColor: '#0a0a0a',
+        borderRadius: 8,
+        padding: 12,
+        color: '#fff',
+        fontSize: 15,
+        borderWidth: 1,
+        borderColor: '#4CAF50',
+        marginTop: 8,
+    },
+    configActions: {
+        flexDirection: 'row',
+        gap: 12,
+        marginTop: 20,
+    },
+    resetButton: {
+        flex: 1,
+        backgroundColor: '#FF9800',
+        padding: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    resetButtonText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    saveConfigButton: {
+        flex: 1,
+        backgroundColor: '#4CAF50',
+        padding: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    saveConfigButtonText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+    },
     // Modal
     modalOverlay: {
         flex: 1,
@@ -672,6 +909,19 @@ const styles = StyleSheet.create({
     modalActions: {
         flexDirection: 'row',
         gap: 12,
+        marginBottom: 12,
+    },
+    resetUrlButton: {
+        flex: 1,
+        backgroundColor: '#FF9800',
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    resetUrlButtonText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 16,
     },
     saveButton: {
         flex: 1,
@@ -686,7 +936,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
     },
     cancelButton: {
-        flex: 1,
         backgroundColor: '#333',
         padding: 16,
         borderRadius: 12,

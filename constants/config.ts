@@ -97,3 +97,21 @@ export const updateBaseUrl = (newUrl: string) => {
 export const getCurrentRelayUrl = () => {
     return currentRelayUrl;
 };
+
+/**
+ * Default Relay Device Configuration
+ * These are the factory default settings that can be restored
+ */
+export const DEFAULT_RELAY_CONFIG = {
+    device_id: 'd76e48f1800c31b712cjgj',
+    local_key: "!WF;Ns(.Lcz'Dt3b",
+    local_ip: '192.168.0.127',
+    version: '3.5'
+};
+
+/**
+ * Default Relay Server URL
+ */
+export const DEFAULT_RELAY_URL = 'http://localhost:3000';
+
+

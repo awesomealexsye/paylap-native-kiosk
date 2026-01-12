@@ -7,6 +7,7 @@ import {
     ActivityIndicator,
     Modal,
     Dimensions,
+    Image,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,6 +16,7 @@ import { unlockDoor } from '../services/relayService';
 import { useAuth } from '../contexts/AuthContext';
 import faceVerificationService from '../services/faceVerificationService';
 import { PasscodeModal } from '../components/PasscodeModal';
+import { SystemDiagnosticsModal } from '../components/SystemDiagnosticsModal';
 
 const { width } = Dimensions.get('window');
 
@@ -27,6 +29,8 @@ export default function KioskScreen() {
     const [verificationResult, setVerificationResult] = useState<any>(null);
     const [showModal, setShowModal] = useState(false);
     const [showPasscodeModal, setShowPasscodeModal] = useState(false);
+    const [showDiagnostics, setShowDiagnostics] = useState(false);
+    const [capturedImageUri, setCapturedImageUri] = useState<string | null>(null);
     const cameraRef = useRef<CameraView>(null);
 
     // Check authentication on mount
@@ -62,6 +66,29 @@ export default function KioskScreen() {
         );
     }
 
+    const unlockDoorWithRetry = async (maxAttempts = 3): Promise<{ success: boolean; error?: string }> => {
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            console.log(`🚪 Attempting to unlock door (${attempt}/${maxAttempts})...`);
+
+            const relayResult = await unlockDoor();
+
+            if (relayResult.success) {
+                console.log(`✅ Door unlocked successfully on attempt ${attempt}`);
+                return { success: true };
+            }
+
+            console.warn(`⚠️ Door unlock attempt ${attempt} failed:`, relayResult.error);
+
+            // If not the last attempt, wait a bit before retrying
+            if (attempt < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay between retries
+            }
+        }
+
+        console.error(`❌ All ${maxAttempts} door unlock attempts failed`);
+        return { success: false, error: 'Failed to unlock door after multiple attempts' };
+    };
+
     const handleCaptureFace = async () => {
         if (!cameraRef.current) return;
 
@@ -88,6 +115,9 @@ export default function KioskScreen() {
                 return;
             }
 
+            // Store captured image to show instead of camera
+            setCapturedImageUri(photo.uri);
+
             // 2. Verify with Python API (Passing gym_id and token)
             const result = await faceVerificationService.verifyFace(photo.uri, selectedGym.id, token);
             setVerificationResult(result);
@@ -97,18 +127,19 @@ export default function KioskScreen() {
                 setModalState('unlocking');
                 console.log('✅ Access granted! Unlocking door...');
 
-                const relayResult = await unlockDoor();
+                // Try to unlock door with retry (up to 3 attempts)
+                const relayResult = await unlockDoorWithRetry(3);
 
                 if (relayResult.success) {
                     // 4. Success state (The door is now open)
                     setModalState('success');
                 } else {
                     // 5. Door unlock fail (but face matched)
-                    console.error('❌ Door unlock failed:', relayResult.error);
+                    console.error('❌ Door unlock failed after retries:', relayResult.error);
                     setModalState('error');
                     setVerificationResult({
                         ...result,
-                        error: 'Door Open Failed. Please try again or contact staff.'
+                        error: 'Door Open Failed after multiple attempts. Please contact staff.'
                     });
                 }
 
@@ -116,12 +147,14 @@ export default function KioskScreen() {
                 setTimeout(() => {
                     setShowModal(false);
                     setModalState('idle');
+                    setCapturedImageUri(null); // Clear captured image
                 }, 4000);
             } else {
                 setModalState('error');
                 setTimeout(() => {
                     setShowModal(false);
                     setModalState('idle');
+                    setCapturedImageUri(null); // Clear captured image
                 }, 3000);
             }
         } catch (error: any) {
@@ -131,8 +164,16 @@ export default function KioskScreen() {
             setTimeout(() => {
                 setShowModal(false);
                 setModalState('idle');
+                setCapturedImageUri(null); // Clear captured image
             }, 3000);
         }
+    };
+
+    const handleCaptureAgain = () => {
+        setCapturedImageUri(null);
+        setModalState('idle');
+        setShowModal(false);
+        setVerificationResult(null);
     };
 
     const handleActionPress = () => {
@@ -180,7 +221,10 @@ export default function KioskScreen() {
                             <Text style={styles.hugeIcon}>✅</Text>
                         </View>
                         <Text style={[styles.modalTitle, { color: '#4CAF50' }]}>Door is Open</Text>
-                        <Text style={styles.modalMessage}>You may now enter the gym.</Text>
+                        <Text style={[styles.modalMessage, { color: '#4CAF50' }]}>
+                            Welcome, {verificationResult?.member?.name}!
+                        </Text>
+                        <Text style={styles.modalDetail}>You may now enter the gym.</Text>
                         <Text style={styles.modalDetail}>Have a great workout!</Text>
                     </>
                 );
@@ -212,41 +256,78 @@ export default function KioskScreen() {
                             <Text style={styles.gymName}>📍 {selectedGym.name}</Text>
                         )}
                     </View>
-                    <TouchableOpacity
-                        style={styles.actionButton}
-                        onPress={handleActionPress}
-                    >
-                        <Text style={styles.actionButtonIcon}>
-                            {isAuthenticated ? '🏠' : '🔐'}
-                        </Text>
-                    </TouchableOpacity>
+                    <View style={styles.headerButtons}>
+                        <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={() => setShowDiagnostics(true)}
+                        >
+                            <Text style={styles.actionButtonIcon}>⚙️</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={handleActionPress}
+                        >
+                            <Text style={styles.actionButtonIcon}>
+                                {isAuthenticated ? '🏠' : '🔐'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
                 <Text style={styles.subtitle}>Position your face in the camera frame</Text>
             </View>
 
             <View style={styles.cameraFrame}>
                 <View style={styles.cameraContainer}>
-                    <CameraView
-                        ref={cameraRef}
-                        style={styles.camera}
-                        facing="front"
-                    />
-                    <View style={styles.faceOverlay}>
-                        <View style={styles.faceGuide} />
-                    </View>
+                    {capturedImageUri ? (
+                        // Show captured image instead of camera
+                        <>
+                            <Image
+                                source={{ uri: capturedImageUri }}
+                                style={styles.capturedImage}
+                                resizeMode="cover"
+                            />
+                            <View style={styles.faceOverlay}>
+                                <View style={[styles.faceGuide, { borderColor: 'rgba(76, 175, 80, 0.6)' }]} />
+                            </View>
+                        </>
+                    ) : (
+                        // Show live camera feed
+                        <>
+                            <CameraView
+                                ref={cameraRef}
+                                style={styles.camera}
+                                facing="front"
+                            />
+                            <View style={styles.faceOverlay}>
+                                <View style={styles.faceGuide} />
+                            </View>
+                        </>
+                    )}
                 </View>
             </View>
 
             <View style={styles.footer}>
-                <TouchableOpacity
-                    style={styles.captureButton}
-                    onPress={handleCaptureFace}
-                    disabled={modalState !== 'idle'}
-                >
-                    <Text style={styles.captureButtonText}>
-                        {modalState === 'idle' ? 'Scan My Face' : 'Checking...'}
-                    </Text>
-                </TouchableOpacity>
+                {capturedImageUri ? (
+                    // Show "Capture Again" button when image is captured
+                    <TouchableOpacity
+                        style={[styles.captureButton, styles.captureAgainButton]}
+                        onPress={handleCaptureAgain}
+                        disabled={modalState !== 'idle' && modalState !== 'scanning'}
+                    >
+                        <Text style={styles.captureButtonText}>📷 Capture Again</Text>
+                    </TouchableOpacity>
+                ) : (
+                    // Show "Scan My Face" button when showing live camera
+                    <TouchableOpacity
+                        style={styles.captureButton}
+                        onPress={handleCaptureFace}
+                        disabled={modalState !== 'idle'}
+                    >
+                        <Text style={styles.captureButtonText}>
+                            {modalState === 'idle' ? 'Scan My Face' : 'Checking...'}
+                        </Text>
+                    </TouchableOpacity>
+                )}
             </View>
 
 
@@ -268,6 +349,11 @@ export default function KioskScreen() {
                 visible={showPasscodeModal}
                 onClose={() => setShowPasscodeModal(false)}
                 onSuccess={handlePasscodeSuccess}
+            />
+
+            <SystemDiagnosticsModal
+                visible={showDiagnostics}
+                onClose={() => setShowDiagnostics(false)}
             />
         </SafeAreaView>
     );
@@ -306,6 +392,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderWidth: 1,
         borderColor: '#333',
+    },
+    headerButtons: {
+        flexDirection: 'row',
+        gap: 12,
     },
     actionButtonIcon: {
         fontSize: 22,
@@ -387,6 +477,15 @@ const styles = StyleSheet.create({
         fontSize: 20,
         fontWeight: 'bold',
         letterSpacing: 1,
+    },
+    captureAgainButton: {
+        backgroundColor: '#FF9800', // Orange color for "Capture Again"
+        shadowColor: '#FF9800',
+    },
+    capturedImage: {
+        flex: 1,
+        width: '100%',
+        height: '100%',
     },
     // Modal Styles
     modalOverlay: {

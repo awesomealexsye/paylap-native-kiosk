@@ -11,14 +11,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../contexts/AuthContext';
 import syncService, { CachedMember } from '../services/syncService';
-
-const STORAGE_KEYS = {
-    CACHED_MEMBERS: 'sync_cached_members',
-    LAST_SYNC_TIME: 'sync_last_sync_time',
-};
 
 export default function SyncMembersScreen() {
     const { token, selectedGym } = useAuth();
@@ -29,53 +23,6 @@ export default function SyncMembersScreen() {
     const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
     const [showSuccessModal, setShowSuccessModal] = useState(false);
     const [syncResult, setSyncResult] = useState<any>(null);
-
-    // Load cached data from AsyncStorage on mount
-    useEffect(() => {
-        loadCachedData();
-    }, []);
-
-    const loadCachedData = async () => {
-        try {
-            const [cachedMembers, cachedSyncTime] = await Promise.all([
-                AsyncStorage.getItem(STORAGE_KEYS.CACHED_MEMBERS),
-                AsyncStorage.getItem(STORAGE_KEYS.LAST_SYNC_TIME),
-            ]);
-
-            if (cachedMembers) {
-                setMembers(JSON.parse(cachedMembers));
-            }
-            if (cachedSyncTime) {
-                setLastSyncTime(cachedSyncTime);
-            }
-        } catch (error) {
-            console.error('❌ Error loading cached data:', error);
-        }
-    };
-
-    const saveCachedData = async (membersData: CachedMember[], syncTime: string | null) => {
-        try {
-            await Promise.all([
-                AsyncStorage.setItem(STORAGE_KEYS.CACHED_MEMBERS, JSON.stringify(membersData)),
-                AsyncStorage.setItem(STORAGE_KEYS.LAST_SYNC_TIME, syncTime || ''),
-            ]);
-        } catch (error) {
-            console.error('❌ Error saving cached data:', error);
-        }
-    };
-
-    const clearCachedData = async () => {
-        try {
-            await Promise.all([
-                AsyncStorage.removeItem(STORAGE_KEYS.CACHED_MEMBERS),
-                AsyncStorage.removeItem(STORAGE_KEYS.LAST_SYNC_TIME),
-            ]);
-            setMembers([]);
-            setLastSyncTime(null);
-        } catch (error) {
-            console.error('❌ Error clearing cached data:', error);
-        }
-    };
 
     const fetchCachedMembers = useCallback(async (showRefreshing = false) => {
         if (!token) return;
@@ -91,9 +38,6 @@ export default function SyncMembersScreen() {
 
             setMembers(membersData);
             setLastSyncTime(syncTime);
-
-            // Save to AsyncStorage
-            await saveCachedData(membersData, syncTime);
         } catch (error) {
             console.error('❌ Error fetching cached members:', error);
         } finally {
@@ -108,9 +52,6 @@ export default function SyncMembersScreen() {
 
     const handleSync = async () => {
         if (!token) return;
-
-        // Clear cached data when starting a full sync
-        await clearCachedData();
 
         setIsSyncing(true);
         try {
