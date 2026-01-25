@@ -8,6 +8,8 @@ import {
     Modal,
     Dimensions,
     Image,
+    BackHandler,
+    Alert,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +19,7 @@ import { useAuth } from '../contexts/AuthContext';
 import faceVerificationService from '../services/faceVerificationService';
 import { PasscodeModal } from '../components/PasscodeModal';
 import { SystemDiagnosticsModal } from '../components/SystemDiagnosticsModal';
+import { KIOSK_CONFIG } from '../constants/config';
 
 const { width } = Dimensions.get('window');
 
@@ -30,6 +33,7 @@ export default function KioskScreen() {
     const [showModal, setShowModal] = useState(false);
     const [showPasscodeModal, setShowPasscodeModal] = useState(false);
     const [showDiagnostics, setShowDiagnostics] = useState(false);
+    const [showExitPasscodeModal, setShowExitPasscodeModal] = useState(false);
     const [capturedImageUri, setCapturedImageUri] = useState<string | null>(null);
     const cameraRef = useRef<CameraView>(null);
 
@@ -39,6 +43,24 @@ export default function KioskScreen() {
             router.replace('/login');
         }
     }, [isLoading, isAuthenticated]);
+
+    // Block back button ONLY on kiosk screen (index.tsx)
+    useEffect(() => {
+        if (!KIOSK_CONFIG.enabled || !KIOSK_CONFIG.blockBackButton) {
+            return;
+        }
+
+        const backHandler = BackHandler.addEventListener(
+            'hardwareBackPress',
+            () => {
+                // Show passcode modal to exit kiosk (same passcode as dashboard)
+                setShowExitPasscodeModal(true);
+                return true; // Prevent default back button behavior
+            }
+        );
+
+        return () => backHandler.remove();
+    }, []);
 
     if (!permission) return <View />;
 
@@ -177,11 +199,30 @@ export default function KioskScreen() {
     };
 
     const handleActionPress = () => {
-        if (!isAuthenticated) {
+        if (isAuthenticated) {
+            setShowPasscodeModal(true);
+        } else {
             router.push('/login');
-            return;
         }
-        setShowPasscodeModal(true);
+    };
+
+    const handleExitPasscodeSuccess = () => {
+        // User verified passcode (same as dashboard passcode)
+        setShowExitPasscodeModal(false);
+        Alert.alert(
+            'Exit Kiosk Mode',
+            'Where would you like to go?',
+            [
+                {
+                    text: 'Go to Dashboard',
+                    onPress: () => router.push('/dashboard')
+                },
+                {
+                    text: 'Stay Here',
+                    style: 'cancel'
+                }
+            ]
+        );
     };
 
     const handlePasscodeSuccess = () => {
@@ -250,12 +291,22 @@ export default function KioskScreen() {
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <View style={styles.headerTop}>
-                    <View>
-                        <Text style={styles.title}>Face Check-In</Text>
-                        {selectedGym && (
-                            <Text style={styles.gymName}>📍 {selectedGym.name}</Text>
-                        )}
-                    </View>
+                    <TouchableOpacity
+                        activeOpacity={1}
+                        onLongPress={() => {
+                            if (KIOSK_CONFIG.longPressToExit) {
+                                setShowExitPasscodeModal(true);
+                            }
+                        }}
+                        delayLongPress={KIOSK_CONFIG.longPressDuration}
+                    >
+                        <View>
+                            <Text style={styles.title}>Face Check-In</Text>
+                            {selectedGym && (
+                                <Text style={styles.gymName}>📍 {selectedGym.name}</Text>
+                            )}
+                        </View>
+                    </TouchableOpacity>
                     <View style={styles.headerButtons}>
                         <TouchableOpacity
                             style={styles.actionButton}
@@ -354,6 +405,13 @@ export default function KioskScreen() {
             <SystemDiagnosticsModal
                 visible={showDiagnostics}
                 onClose={() => setShowDiagnostics(false)}
+            />
+
+            {/* Exit Passcode Modal - Uses same passcode as dashboard */}
+            <PasscodeModal
+                visible={showExitPasscodeModal}
+                onClose={() => setShowExitPasscodeModal(false)}
+                onSuccess={handleExitPasscodeSuccess}
             />
         </SafeAreaView>
     );

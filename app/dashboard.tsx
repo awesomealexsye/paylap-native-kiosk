@@ -71,6 +71,14 @@ export default function DashboardScreen() {
             description: 'Sync local face database',
             onPress: () => router.push('/sync-members'),
         },
+        {
+            id: 'kiosk',
+            title: 'Face Check-In',
+            icon: '📷',
+            gradient: ['#ffa726', '#fb8c00'],
+            description: 'Launch kiosk mode',
+            onPress: () => router.push('/'),
+        },
     ];
 
     return (
@@ -78,9 +86,17 @@ export default function DashboardScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
                 {/* Header */}
                 <View style={styles.header}>
-                    <View>
-                        <Text style={styles.greeting}>Hello, {user?.name || 'User'}! 👋</Text>
-                        <Text style={styles.subtitle}>Welcome to PayLap Fitness</Text>
+                    <View style={styles.headerLeft}>
+                        <TouchableOpacity
+                            style={styles.backButton}
+                            onPress={() => router.push('/')}
+                        >
+                            <Text style={styles.backIcon}>←</Text>
+                        </TouchableOpacity>
+                        <View>
+                            <Text style={styles.greeting}>Hello, {user?.name || 'User'}! 👋</Text>
+                            <Text style={styles.subtitle}>Welcome to PayLap Fitness</Text>
+                        </View>
                     </View>
                     <TouchableOpacity
                         style={styles.logoutButton}
@@ -152,6 +168,7 @@ export default function DashboardScreen() {
                                     setup: '#4facfe',
                                     settings: '#43e97b',
                                     sync: '#fa709a',
+                                    kiosk: '#ffa726',
                                 };
                                 return colors[id] || '#4CAF50';
                             };
@@ -245,6 +262,27 @@ const styles = StyleSheet.create({
         alignItems: 'flex-start',
         padding: 24,
         paddingBottom: 16,
+    },
+    headerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        gap: 12,
+    },
+    backButton: {
+        width: 48,
+        height: 48,
+        backgroundColor: '#1a1a1a',
+        borderRadius: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#252525',
+    },
+    backIcon: {
+        fontSize: 24,
+        color: '#4CAF50',
+        fontWeight: 'bold',
     },
     greeting: {
         fontSize: 32,

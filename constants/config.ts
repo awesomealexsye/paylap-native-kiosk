@@ -114,4 +114,16 @@ export const DEFAULT_RELAY_CONFIG = {
  */
 export const DEFAULT_RELAY_URL = 'http://localhost:3000';
 
+/**
+ * Kiosk Mode Configuration
+ * Controls app lockdown and exit behavior
+ */
+export const KIOSK_CONFIG = {
+    enabled: true,                    // Master switch for kiosk mode
+    autoEnableOnLaunch: true,         // Auto-enable kiosk mode when app starts
+    blockBackButton: true,            // Prevent back button from exiting app (only on kiosk screen)
+    showExitButton: false,            // Show visible exit button (false = hidden, use long press)
+    longPressToExit: true,            // Long press logo to show exit modal
+    longPressDuration: 3000,          // 3 seconds to trigger exit modal
+};
 
