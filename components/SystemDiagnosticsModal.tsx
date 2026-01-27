@@ -13,6 +13,7 @@ import {
     ActivityIndicator,
     ScrollView,
 } from 'react-native';
+import { router } from 'expo-router';
 import { PasscodeModal } from './PasscodeModal';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -140,6 +141,23 @@ export function SystemDiagnosticsModal({ visible, onClose }: SystemDiagnosticsMo
         runHealthChecks();
     };
 
+    const handleViewDetails = () => {
+        // Prepare diagnostic data with timestamps
+        const diagnosticData = items.map(item => ({
+            ...item,
+            timestamp: new Date().toLocaleString(),
+        }));
+
+        // Close modal and navigate to details screen
+        handleClose();
+        router.push({
+            pathname: '/diagnostics-details',
+            params: {
+                data: JSON.stringify(diagnosticData),
+            },
+        });
+    };
+
     // Calculate overall health
     const getOverallHealth = () => {
         const errorCount = items.filter(i => i.status === 'error').length;
@@ -159,6 +177,9 @@ export function SystemDiagnosticsModal({ visible, onClose }: SystemDiagnosticsMo
     };
 
     const overallHealth = getOverallHealth();
+
+    // Check if we should show "More Details" button (only when degraded or error)
+    const hasIssues = items.some(item => item.status === 'error') && !isChecking;
 
     const getStatusIcon = (status: string) => {
         switch (status) {
@@ -245,8 +266,16 @@ export function SystemDiagnosticsModal({ visible, onClose }: SystemDiagnosticsMo
 
                             {/* Action Buttons */}
                             <View style={styles.actions}>
+                                {hasIssues && (
+                                    <TouchableOpacity
+                                        style={[styles.actionButton, styles.detailsButton]}
+                                        onPress={handleViewDetails}
+                                    >
+                                        <Text style={styles.actionButtonText}>📋 More Details</Text>
+                                    </TouchableOpacity>
+                                )}
                                 <TouchableOpacity
-                                    style={[styles.actionButton, styles.refreshButton]}
+                                    style={[styles.actionButton, styles.refreshButton, hasIssues && { flex: 0.6 }]}
                                     onPress={handleRefresh}
                                     disabled={isChecking}
                                 >
@@ -257,7 +286,7 @@ export function SystemDiagnosticsModal({ visible, onClose }: SystemDiagnosticsMo
                                     )}
                                 </TouchableOpacity>
                                 <TouchableOpacity
-                                    style={[styles.actionButton, styles.closeActionButton]}
+                                    style={[styles.actionButton, styles.closeActionButton, hasIssues && { flex: 0.6 }]}
                                     onPress={handleClose}
                                 >
                                     <Text style={styles.actionButtonText}>Close</Text>
@@ -395,6 +424,7 @@ const styles = StyleSheet.create({
         gap: 12,
         borderTopWidth: 1,
         borderTopColor: '#333',
+        flexWrap: 'wrap',
     },
     actionButton: {
         flex: 1,
@@ -402,6 +432,11 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
+        minWidth: 100,
+    },
+    detailsButton: {
+        backgroundColor: '#FF9800',
+        flex: 1,
     },
     refreshButton: {
         backgroundColor: '#4CAF50',
