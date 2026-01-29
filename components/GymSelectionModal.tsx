@@ -19,7 +19,6 @@ import {
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import gymService from '../services/gymService';
-import authService from '../services/authService';
 import { Gym } from '../types/auth';
 
 const { width, height } = Dimensions.get('window');
@@ -122,18 +121,27 @@ export const GymSelectionModal: React.FC<GymSelectionModalProps> = ({ visible, o
                                 {/* Header */}
                                 <View style={styles.header}>
                                     <Text style={styles.icon}>🏋️</Text>
-                                    <Text style={styles.title}>Select Your Gym</Text>
+                                    <Text style={styles.title}>
+                                        {gyms.length === 1 ? 'Confirm Your Gym' : 'Select Your Gym'}
+                                    </Text>
                                     <Text style={styles.subtitle}>
-                                        Choose which gym this kiosk will be used for
+                                        {gyms.length === 1
+                                            ? 'This kiosk will be used for the gym below'
+                                            : 'Choose which gym this kiosk will be used for'
+                                        }
                                     </Text>
                                 </View>
 
                                 {/* Gym List - Scrollable */}
                                 <ScrollView
                                     style={styles.scrollView}
-                                    contentContainerStyle={styles.scrollContent}
-                                    showsVerticalScrollIndicator={true}
+                                    contentContainerStyle={[
+                                        styles.scrollContent,
+                                        gyms.length === 1 && styles.singleGymContent
+                                    ]}
+                                    showsVerticalScrollIndicator={gyms.length > 3}
                                     keyboardShouldPersistTaps="handled"
+                                    bounces={gyms.length > 1}
                                 >
                                     {gyms.map((gym) => (
                                         <TouchableOpacity
@@ -202,7 +210,9 @@ export const GymSelectionModal: React.FC<GymSelectionModalProps> = ({ visible, o
                                         {isSaving ? (
                                             <ActivityIndicator size="small" color="#fff" />
                                         ) : (
-                                            <Text style={styles.confirmButtonText}>Confirm Selection</Text>
+                                            <Text style={styles.confirmButtonText}>
+                                                {gyms.length === 1 ? 'Continue' : 'Confirm Selection'}
+                                            </Text>
                                         )}
                                     </TouchableOpacity>
                                 </View>
@@ -299,12 +309,18 @@ const styles = StyleSheet.create({
         paddingHorizontal: 10,
     },
     scrollView: {
-        flex: 1,
+        flexGrow: 0,
+        flexShrink: 1,
         maxHeight: height * 0.5,
     },
     scrollContent: {
         padding: 16,
         paddingBottom: 8,
+        flexGrow: 1,
+    },
+    singleGymContent: {
+        justifyContent: 'center',
+        minHeight: 120,
     },
     gymCard: {
         flexDirection: 'row',

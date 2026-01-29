@@ -9,12 +9,11 @@ import {
     ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
-    Dimensions,
+    useWindowDimensions,
+    TouchableWithoutFeedback,
+    Keyboard,
 } from 'react-native';
 import authService from '../services/authService';
-
-const { width, height } = Dimensions.get('window');
-const isTablet = width > 768;
 
 interface PasscodeModalProps {
     visible: boolean;
@@ -23,6 +22,8 @@ interface PasscodeModalProps {
 }
 
 export const PasscodeModal: React.FC<PasscodeModalProps> = ({ visible, onClose, onSuccess }) => {
+    const { width } = useWindowDimensions();
+    const isTablet = width > 768;
     const [passcode, setPasscode] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [serverPasscode, setServerPasscode] = useState<string | null>(null);
@@ -78,125 +79,139 @@ export const PasscodeModal: React.FC<PasscodeModalProps> = ({ visible, onClose, 
 
     return (
         <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-            <View style={styles.overlay}>
-                <KeyboardAvoidingView
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                    style={styles.keyboardAvoid}
-                    keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 40}
-                >
-                    <View style={styles.cardContainer}>
-                        <View
-                            style={[styles.card, { backgroundColor: '#1a1a1a' }]}
-                        >
-                            {/* Glass Effect Top Border */}
-                            <View style={styles.glassTopBorder} />
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+                style={styles.container}
+            >
+                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                    <View style={styles.overlay}>
+                        <TouchableWithoutFeedback>
+                            <View style={[
+                                styles.cardContainer,
+                                { width: isTablet ? '45%' : '90%' }
+                            ]}>
+                                <View style={styles.card}>
+                                    {/* Glass Effect Top Border */}
+                                    <View style={styles.glassTopBorder} />
 
-                            <View style={styles.iconWrapper}>
-                                <View
-                                    style={[styles.iconGradient, { backgroundColor: '#4CAF50' }]}
-                                >
-                                    <Text style={styles.lockIcon}>🔐</Text>
-                                </View>
-                                <View style={styles.iconGlow} />
-                            </View>
-
-                            <Text style={styles.title}>Admin Access</Text>
-                            <Text style={styles.subtitle}>Enter 6-digit kiosk passcode to continue</Text>
-
-                            {fetchingPasscode ? (
-                                <View style={styles.loaderContainer}>
-                                    <ActivityIndicator size="large" color="#4CAF50" />
-                                    <Text style={styles.loaderText}>Fetching Authorization...</Text>
-                                </View>
-                            ) : (
-                                <View style={styles.form}>
-                                    <View style={styles.inputContainer}>
-                                        <TextInput
-                                            style={[styles.input, error ? styles.inputError : null]}
-                                            placeholder="ENTER CODE"
-                                            placeholderTextColor="#333"
-                                            value={passcode}
-                                            onChangeText={(text) => {
-                                                setPasscode(text);
-                                                setError(null);
-                                            }}
-                                            maxLength={6}
-                                            autoCapitalize="characters"
-                                            secureTextEntry
-                                            autoFocus={true}
-                                            keyboardType="default"
-                                            selectionColor="#4CAF50"
-                                        />
+                                    <View style={styles.iconWrapper}>
+                                        <View style={styles.iconGradient}>
+                                            <Text style={styles.lockIcon}>🔐</Text>
+                                        </View>
+                                        <View style={styles.iconGlow} />
                                     </View>
 
-                                    {error && (
-                                        <View style={styles.errorContainer}>
-                                            <Text style={styles.errorText}>⚠️ {error}</Text>
+                                    <Text style={styles.title}>Admin Access</Text>
+                                    <Text style={styles.subtitle}>
+                                        Enter 6-digit numeric passcode to continue
+                                    </Text>
+
+                                    {fetchingPasscode ? (
+                                        <View style={styles.loaderContainer}>
+                                            <ActivityIndicator size="large" color="#4CAF50" />
+                                            <Text style={styles.loaderText}>Fetching Authorization...</Text>
+                                        </View>
+                                    ) : (
+                                        <View style={styles.form}>
+                                            <View style={styles.inputContainer}>
+                                                <TextInput
+                                                    style={[styles.input, error ? styles.inputError : null]}
+                                                    placeholder="000000"
+                                                    placeholderTextColor="#333"
+                                                    value={passcode}
+                                                    onChangeText={(text) => {
+                                                        setPasscode(text);
+                                                        setError(null);
+                                                    }}
+                                                    maxLength={6}
+                                                    secureTextEntry
+                                                    autoFocus={true}
+                                                    keyboardType="number-pad"
+                                                    returnKeyType="done"
+                                                    selectionColor="#4CAF50"
+                                                    onSubmitEditing={handleSubmit}
+                                                />
+                                            </View>
+
+                                            {error && (
+                                                <View style={styles.errorContainer}>
+                                                    <Text style={styles.errorText}>⚠️ {error}</Text>
+                                                </View>
+                                            )}
+
+                                            <TouchableOpacity
+                                                style={styles.buttonWrapper}
+                                                onPress={handleSubmit}
+                                                disabled={!passcode || passcode.length < 1}
+                                                activeOpacity={0.8}
+                                            >
+                                                <View
+                                                    style={[
+                                                        styles.submitButton,
+                                                        {
+                                                            backgroundColor: (!passcode || passcode.length < 1)
+                                                                ? '#252525'
+                                                                : '#4CAF50'
+                                                        }
+                                                    ]}
+                                                >
+                                                    <Text style={[
+                                                        styles.buttonText,
+                                                        (!passcode || passcode.length < 1) && styles.buttonTextDisabled
+                                                    ]}>
+                                                        Confirm Access
+                                                    </Text>
+                                                </View>
+                                            </TouchableOpacity>
+
+                                            <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+                                                <Text style={styles.cancelText}>Cancel</Text>
+                                            </TouchableOpacity>
                                         </View>
                                     )}
-
-                                    <TouchableOpacity
-                                        style={styles.buttonWrapper}
-                                        onPress={handleSubmit}
-                                        disabled={!passcode || passcode.length < 1}
-                                        activeOpacity={0.8}
-                                    >
-                                        <View
-                                            style={[styles.submitButton, { backgroundColor: (!passcode || passcode.length < 1) ? '#252525' : '#4CAF50' }]}
-                                        >
-                                            <Text style={[
-                                                styles.buttonText,
-                                                (!passcode || passcode.length < 1) && styles.buttonTextDisabled
-                                            ]}>
-                                                Confirm Access
-                                            </Text>
-                                        </View>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-                                        <Text style={styles.cancelText}>Cancel</Text>
-                                    </TouchableOpacity>
                                 </View>
-                            )}
-                        </View>
+                            </View>
+                        </TouchableWithoutFeedback>
                     </View>
-                </KeyboardAvoidingView>
-            </View>
+                </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
         </Modal>
     );
 };
 
 const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+    },
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.85)',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 16,
-    },
-    keyboardAvoid: {
-        width: '100%',
-        maxHeight: height * 0.9,
-        alignItems: 'center',
-        justifyContent: 'center',
+        padding: 20,
     },
     cardContainer: {
-        width: isTablet ? '60%' : '92%',
-        maxWidth: 420,
-        maxHeight: height * 0.85,
+        maxWidth: 500,
         borderRadius: 32,
         overflow: 'hidden',
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.08)',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 20 },
-        shadowOpacity: 0.6,
-        shadowRadius: 30,
-        elevation: 25,
+        ...Platform.select({
+            ios: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 20 },
+                shadowOpacity: 0.6,
+                shadowRadius: 30,
+            },
+            android: {
+                elevation: 25,
+            },
+        }),
     },
     card: {
-        paddingVertical: isTablet ? 40 : 32,
-        paddingHorizontal: isTablet ? 24 : 20,
+        backgroundColor: '#1a1a1a',
+        paddingVertical: 40,
+        paddingHorizontal: 28,
         alignItems: 'center',
     },
     glassTopBorder: {
@@ -215,6 +230,7 @@ const styles = StyleSheet.create({
         width: 80,
         height: 80,
         borderRadius: 40,
+        backgroundColor: '#4CAF50',
         justifyContent: 'center',
         alignItems: 'center',
         zIndex: 2,
@@ -234,16 +250,16 @@ const styles = StyleSheet.create({
         fontSize: 34,
     },
     title: {
-        fontSize: isTablet ? 28 : 24,
+        fontSize: 26,
         fontWeight: '900',
         color: '#fff',
         marginBottom: 10,
         letterSpacing: -0.5,
     },
     subtitle: {
-        fontSize: isTablet ? 15 : 14,
+        fontSize: 14,
         color: '#999',
-        marginBottom: isTablet ? 35 : 28,
+        marginBottom: 32,
         textAlign: 'center',
         lineHeight: 22,
         paddingHorizontal: 10,
@@ -272,11 +288,11 @@ const styles = StyleSheet.create({
         borderWidth: 1.5,
         borderColor: 'rgba(255, 255, 255, 0.1)',
         borderRadius: 20,
-        paddingVertical: isTablet ? 20 : 16,
+        paddingVertical: 18,
         color: '#fff',
-        fontSize: isTablet ? 26 : 22,
+        fontSize: 24,
         textAlign: 'center',
-        letterSpacing: isTablet ? 10 : 8,
+        letterSpacing: 10,
         fontWeight: '900',
     },
     inputError: {
@@ -311,13 +327,13 @@ const styles = StyleSheet.create({
     },
     submitButton: {
         width: '100%',
-        paddingVertical: isTablet ? 20 : 16,
+        paddingVertical: 18,
         alignItems: 'center',
         justifyContent: 'center',
     },
     buttonText: {
         color: '#fff',
-        fontSize: isTablet ? 18 : 16,
+        fontSize: 17,
         fontWeight: '900',
         letterSpacing: 0.5,
     },
