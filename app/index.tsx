@@ -19,6 +19,7 @@ import { useAuth } from '../contexts/AuthContext';
 import faceVerificationService from '../services/faceVerificationService';
 import { PasscodeModal } from '../components/PasscodeModal';
 import { SystemDiagnosticsModal } from '../components/SystemDiagnosticsModal';
+import { GymSelectionModal } from '../components/GymSelectionModal';
 import { KIOSK_CONFIG } from '../constants/config';
 import { useKioskSettings } from '../contexts/KioskSettingsContext';
 
@@ -36,6 +37,7 @@ export default function KioskScreen() {
     const [showPasscodeModal, setShowPasscodeModal] = useState(false);
     const [showDiagnostics, setShowDiagnostics] = useState(false);
     const [showExitPasscodeModal, setShowExitPasscodeModal] = useState(false);
+    const [showGymSelection, setShowGymSelection] = useState(false);
     const [capturedImageUri, setCapturedImageUri] = useState<string | null>(null);
     const [verificationTime, setVerificationTime] = useState(0);
     const cameraRef = useRef<CameraView>(null);
@@ -47,6 +49,17 @@ export default function KioskScreen() {
             router.replace('/login');
         }
     }, [authLoading, isAuthenticated]);
+
+    // Check gym selection - show modal if no gym is selected
+    useEffect(() => {
+        if (!authLoading && isAuthenticated && !selectedGym) {
+            console.log('⚠️ No gym selected, showing gym selection modal');
+            setShowGymSelection(true);
+        } else if (selectedGym) {
+            console.log('✅ Gym selected:', selectedGym.name);
+            setShowGymSelection(false);
+        }
+    }, [authLoading, isAuthenticated, selectedGym]);
 
     // Block back button ONLY on kiosk screen (index.tsx)
     useEffect(() => {
@@ -513,6 +526,11 @@ export default function KioskScreen() {
                 visible={showExitPasscodeModal}
                 onClose={() => setShowExitPasscodeModal(false)}
                 onSuccess={handleExitPasscodeSuccess}
+            />
+
+            {/* Gym Selection Modal - Shown when no gym is selected */}
+            <GymSelectionModal
+                visible={showGymSelection}
             />
         </SafeAreaView>
     );

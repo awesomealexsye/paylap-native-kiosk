@@ -64,14 +64,6 @@ export default function DashboardScreen() {
             onPress: () => router.push('/settings'),
         },
         {
-            id: 'sync',
-            title: 'Sync Members',
-            icon: '🔄',
-            gradient: ['#fa709a', '#fee140'],
-            description: 'Sync local face database',
-            onPress: () => router.push('/sync-members'),
-        },
-        {
             id: 'kiosk',
             title: 'Face Check-In',
             icon: '📷',

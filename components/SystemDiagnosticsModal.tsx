@@ -12,7 +12,13 @@ import {
     TouchableOpacity,
     ActivityIndicator,
     ScrollView,
+    Dimensions,
+    KeyboardAvoidingView,
+    Platform,
 } from 'react-native';
+
+const { width, height } = Dimensions.get('window');
+const isTablet = width > 768;
 import { router } from 'expo-router';
 import { PasscodeModal } from './PasscodeModal';
 import { useAuth } from '../contexts/AuthContext';
@@ -215,9 +221,14 @@ export function SystemDiagnosticsModal({ visible, onClose }: SystemDiagnosticsMo
                     transparent
                     animationType="fade"
                     onRequestClose={handleClose}
+                    statusBarTranslucent
                 >
                     <View style={styles.overlay}>
-                        <View style={styles.container}>
+                        <KeyboardAvoidingView
+                            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                            style={styles.keyboardAvoid}
+                        >
+                            <View style={styles.container}>
                             {/* Header */}
                             <View style={styles.header}>
                                 <Text style={styles.title}>System Diagnostics</Text>
@@ -293,6 +304,7 @@ export function SystemDiagnosticsModal({ visible, onClose }: SystemDiagnosticsMo
                                 </TouchableOpacity>
                             </View>
                         </View>
+                        </KeyboardAvoidingView>
                     </View>
                 </Modal>
             )}
@@ -306,14 +318,20 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0, 0, 0, 0.9)',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20,
+        padding: 16,
+    },
+    keyboardAvoid: {
+        width: '100%',
+        maxHeight: height * 0.9,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     container: {
         backgroundColor: '#1a1a1a',
         borderRadius: 24,
-        width: '100%',
-        maxWidth: 500,
-        maxHeight: '85%',
+        width: isTablet ? '70%' : '96%',
+        maxWidth: 600,
+        maxHeight: height * 0.85,
         borderWidth: 1,
         borderColor: '#333',
         overflow: 'hidden',
@@ -322,13 +340,13 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: 24,
-        paddingBottom: 16,
+        padding: isTablet ? 24 : 18,
+        paddingBottom: isTablet ? 16 : 14,
         borderBottomWidth: 1,
         borderBottomColor: '#333',
     },
     title: {
-        fontSize: 24,
+        fontSize: isTablet ? 24 : 20,
         fontWeight: 'bold',
         color: '#fff',
     },
@@ -346,9 +364,9 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     healthSummary: {
-        margin: 20,
-        marginBottom: 16,
-        padding: 20,
+        margin: isTablet ? 20 : 16,
+        marginBottom: isTablet ? 16 : 12,
+        padding: isTablet ? 20 : 16,
         backgroundColor: '#0f0f0f',
         borderRadius: 16,
         borderLeftWidth: 4,
@@ -375,7 +393,8 @@ const styles = StyleSheet.create({
     },
     listContainer: {
         flex: 1,
-        paddingHorizontal: 20,
+        maxHeight: height * 0.4,
+        paddingHorizontal: isTablet ? 20 : 16,
     },
     diagnosticItem: {
         backgroundColor: '#0f0f0f',
@@ -420,19 +439,19 @@ const styles = StyleSheet.create({
     },
     actions: {
         flexDirection: 'row',
-        padding: 20,
-        gap: 12,
+        padding: isTablet ? 20 : 14,
+        gap: isTablet ? 12 : 8,
         borderTopWidth: 1,
         borderTopColor: '#333',
         flexWrap: 'wrap',
     },
     actionButton: {
         flex: 1,
-        paddingVertical: 16,
+        paddingVertical: isTablet ? 16 : 14,
         borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
-        minWidth: 100,
+        minWidth: isTablet ? 100 : 80,
     },
     detailsButton: {
         backgroundColor: '#FF9800',
@@ -446,7 +465,7 @@ const styles = StyleSheet.create({
     },
     actionButtonText: {
         color: '#fff',
-        fontSize: 16,
+        fontSize: isTablet ? 16 : 14,
         fontWeight: '600',
     },
 });
