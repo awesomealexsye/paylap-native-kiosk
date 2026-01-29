@@ -30,10 +30,12 @@ import {
 import { config, updateBaseUrl, DEFAULT_RELAY_CONFIG, DEFAULT_RELAY_URL } from '../constants/config';
 import { unlockDoor } from '../services/relayService';
 import { updateRelayConfig } from '../services/relayConfigService';
+import { useKioskSettings } from '../contexts/KioskSettingsContext';
 
 const STORAGE_KEY_API_URL = '@kiosk_api_url';
 
 export default function SettingsScreen() {
+    const { isRelayEnabled, setRelayEnabled } = useKioskSettings();
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [serverConfig, setServerConfig] = useState<any>(null);
@@ -303,6 +305,38 @@ export default function SettingsScreen() {
                         </TouchableOpacity>
                         <Text style={styles.title}>Settings</Text>
                         <Text style={styles.subtitle}>Manage kiosk configuration</Text>
+                    </View>
+
+                    {/* Relay Enable/Disable Section */}
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Relay Mode</Text>
+                        <View style={styles.card}>
+                            <View style={styles.toggleRow}>
+                                <View style={styles.toggleInfo}>
+                                    <Text style={styles.toggleLabel}>
+                                        {isRelayEnabled ? '🟢 Relay Feature Enabled' : '🔴 Relay Feature Disabled'}
+                                    </Text>
+                                    <View style={styles.toggleStatusContainer}>
+                                        {isRelayEnabled ? (
+                                            <Text style={styles.toggleHint}>
+                                                The system will attempt to unlock the door after successful face verification.
+                                            </Text>
+                                        ) : (
+                                            <Text style={styles.toggleHint}>
+                                                Relay interaction is skipped. Python API will only record attendance.
+                                            </Text>
+                                        )}
+                                    </View>
+                                </View>
+                                <TouchableOpacity
+                                    style={[styles.toggleButton, isRelayEnabled ? styles.toggleButtonOn : styles.toggleButtonOff]}
+                                    onPress={() => setRelayEnabled(!isRelayEnabled)}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={[styles.toggleCircle, isRelayEnabled ? styles.toggleCircleOn : styles.toggleCircleOff]} />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
                     </View>
 
                     {/* Server Connectivity Section */}
@@ -642,6 +676,61 @@ const styles = StyleSheet.create({
         fontSize: 20,
         fontWeight: '700',
         color: '#fff',
+    },
+    // Toggle Styles
+    toggleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    toggleInfo: {
+        flex: 1,
+        marginRight: 16,
+    },
+    toggleLabel: {
+        fontSize: 17,
+        fontWeight: '600',
+        color: '#fff',
+        marginBottom: 6,
+    },
+    toggleStatusContainer: {
+        minHeight: 40,
+        justifyContent: 'center',
+    },
+    toggleHint: {
+        fontSize: 13,
+        color: '#888',
+        lineHeight: 18,
+    },
+    toggleButton: {
+        width: 60,
+        height: 32,
+        borderRadius: 16,
+        padding: 4,
+        justifyContent: 'center',
+    },
+    toggleButtonOn: {
+        backgroundColor: '#4CAF50',
+    },
+    toggleButtonOff: {
+        backgroundColor: '#333',
+    },
+    toggleCircle: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#fff',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    toggleCircleOn: {
+        alignSelf: 'flex-end',
+    },
+    toggleCircleOff: {
+        alignSelf: 'flex-start',
     },
     checkAllButton: {
         backgroundColor: '#1f1f1f',

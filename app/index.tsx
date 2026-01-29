@@ -20,13 +20,15 @@ import faceVerificationService from '../services/faceVerificationService';
 import { PasscodeModal } from '../components/PasscodeModal';
 import { SystemDiagnosticsModal } from '../components/SystemDiagnosticsModal';
 import { KIOSK_CONFIG } from '../constants/config';
+import { useKioskSettings } from '../contexts/KioskSettingsContext';
 
 const { width } = Dimensions.get('window');
 
 type ModalState = 'idle' | 'scanning' | 'unlocking' | 'success' | 'error';
 
 export default function KioskScreen() {
-    const { isLoading, isAuthenticated, selectedGym, token } = useAuth();
+    const { isLoading: authLoading, isAuthenticated, selectedGym, token } = useAuth();
+    const { isRelayEnabled, isLoading: settingsLoading } = useKioskSettings();
     const [permission, requestPermission] = useCameraPermissions();
     const [modalState, setModalState] = useState<ModalState>('idle');
     const [verificationResult, setVerificationResult] = useState<any>(null);
@@ -35,14 +37,16 @@ export default function KioskScreen() {
     const [showDiagnostics, setShowDiagnostics] = useState(false);
     const [showExitPasscodeModal, setShowExitPasscodeModal] = useState(false);
     const [capturedImageUri, setCapturedImageUri] = useState<string | null>(null);
+    const [verificationTime, setVerificationTime] = useState(0);
     const cameraRef = useRef<CameraView>(null);
+    const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // Check authentication on mount
     useEffect(() => {
-        if (!isLoading && !isAuthenticated) {
+        if (!authLoading && !isAuthenticated) {
             router.replace('/login');
         }
-    }, [isLoading, isAuthenticated]);
+    }, [authLoading, isAuthenticated]);
 
     // Block back button ONLY on kiosk screen (index.tsx)
     useEffect(() => {
@@ -62,6 +66,30 @@ export default function KioskScreen() {
         return () => backHandler.remove();
     }, []);
 
+    // Timer for face verification
+    useEffect(() => {
+        if (modalState === 'scanning') {
+            // Reset and start timer
+            setVerificationTime(0);
+            timerIntervalRef.current = setInterval(() => {
+                setVerificationTime(prev => prev + 1);
+            }, 1000);
+        } else {
+            // Stop timer when not scanning
+            if (timerIntervalRef.current) {
+                clearInterval(timerIntervalRef.current);
+                timerIntervalRef.current = null;
+            }
+        }
+
+        // Cleanup on unmount
+        return () => {
+            if (timerIntervalRef.current) {
+                clearInterval(timerIntervalRef.current);
+            }
+        };
+    }, [modalState]);
+
     if (!permission) return <View />;
 
     if (!permission.granted) {
@@ -77,7 +105,7 @@ export default function KioskScreen() {
         );
     }
 
-    if (isLoading) {
+    if (authLoading || settingsLoading) {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.loadingContainer}>
@@ -91,8 +119,11 @@ export default function KioskScreen() {
     const unlockDoorWithRetry = async (maxAttempts = 3): Promise<{ success: boolean; error?: string }> => {
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             console.log(`🚪 Attempting to unlock door (${attempt}/${maxAttempts})...`);
+            const attemptStartTime = Date.now();
 
             const relayResult = await unlockDoor();
+
+            const attemptDuration = Date.now() - attemptStartTime;
 
             if (relayResult.success) {
                 console.log(`✅ Door unlocked successfully on attempt ${attempt}`);
@@ -119,50 +150,83 @@ export default function KioskScreen() {
             return;
         }
 
+        // ============ PERFORMANCE TRACKING START ============
+        const processStartTime = Date.now();
+
         // Start scanning
         setModalState('scanning');
         setShowModal(true);
         setVerificationResult(null);
 
         try {
-            // 1. Capture photo
+            // ============ STEP 1: CAPTURE PHOTO ============
+            const captureStartTime = Date.now();
+
             const photo = await cameraRef.current.takePictureAsync({
                 base64: false,
                 quality: 0.7,
             });
 
+            const captureEndTime = Date.now();
+            const captureDuration = captureEndTime - captureStartTime;
+
             if (!photo || !photo.uri) {
+                console.error('❌ Photo capture failed!');
+                console.log(`⏱️  Failed after: ${captureDuration}ms (${(captureDuration / 1000).toFixed(3)}s)\n`);
                 setModalState('error');
                 setVerificationResult({ error: 'Failed to capture photo' });
                 return;
             }
-
             // Store captured image to show instead of camera
             setCapturedImageUri(photo.uri);
 
-            // 2. Verify with Python API (Passing gym_id and token)
+            // ============ STEP 2: FACE VERIFICATION ============
+            const verificationStartTime = Date.now();
+
             const result = await faceVerificationService.verifyFace(photo.uri, selectedGym.id, token);
+
+            const verificationEndTime = Date.now();
+            const verificationDuration = verificationEndTime - verificationStartTime;
             setVerificationResult(result);
 
             if (result.access_granted && result.success) {
-                // 3. Move to Unlocking stage (Showing "Please wait for door to open")
-                setModalState('unlocking');
-                console.log('✅ Access granted! Unlocking door...');
+                if (isRelayEnabled) {
+                    // ============ STEP 3: UNLOCK DOOR (RELAY) ============
+                    setModalState('unlocking');
+                    console.log('\n🚪 Step 3: Unlocking door via relay...');
+                    const relayStartTime = Date.now();
 
-                // Try to unlock door with retry (up to 3 attempts)
-                const relayResult = await unlockDoorWithRetry(3);
+                    // Try to unlock door with retry (up to 3 attempts)
+                    const relayResult = await unlockDoorWithRetry(3);
 
-                if (relayResult.success) {
-                    // 4. Success state (The door is now open)
-                    setModalState('success');
+                    const relayEndTime = Date.now();
+                    const relayDuration = relayEndTime - relayStartTime;
+
+                    if (relayResult.success) {
+                        // 4. Success state (The door is now open)
+                        setModalState('success');
+
+                        // ============ TOTAL SUCCESS SUMMARY ============
+                        const totalProcessTime = Date.now() - processStartTime;
+                    } else {
+                        // 5. Door unlock fail (but face matched)
+                        console.error('❌ Door unlock failed after retries:', relayResult.error);
+                        setModalState('error');
+                        setVerificationResult({
+                            ...result,
+                            error: 'Door Open Failed after multiple attempts. Please contact staff.'
+                        });
+
+                        const totalProcessTime = Date.now() - processStartTime;
+                        console.log(`\n❌ Process failed after: ${totalProcessTime}ms (${(totalProcessTime / 1000).toFixed(3)}s)\n`);
+                    }
                 } else {
-                    // 5. Door unlock fail (but face matched)
-                    console.error('❌ Door unlock failed after retries:', relayResult.error);
-                    setModalState('error');
-                    setVerificationResult({
-                        ...result,
-                        error: 'Door Open Failed after multiple attempts. Please contact staff.'
-                    });
+                    // Skip relay, just show success
+                    console.log('✅ Access granted! (Relay disabled - skipping door unlock)');
+                    setModalState('success');
+
+                    // ============ TOTAL SUCCESS SUMMARY (NO RELAY) ============
+                    const totalProcessTime = Date.now() - processStartTime;
                 }
 
                 // Close modal after showing status for a bit
@@ -172,6 +236,12 @@ export default function KioskScreen() {
                     setCapturedImageUri(null); // Clear captured image
                 }, 4000);
             } else {
+                // ============ VERIFICATION FAILED ============
+                console.error('❌ Face verification failed!');
+                console.error(`   └─ Error: ${result.error || 'Face not recognized'}`);
+
+                const totalProcessTime = Date.now() - processStartTime;
+
                 setModalState('error');
                 setTimeout(() => {
                     setShowModal(false);
@@ -180,7 +250,7 @@ export default function KioskScreen() {
                 }, 3000);
             }
         } catch (error: any) {
-            console.error('❌ Process error:', error);
+            // ============ UNEXPECTED ERROR ============
             setModalState('error');
             setVerificationResult({ error: 'System error. Please try again.' });
             setTimeout(() => {
@@ -240,6 +310,7 @@ export default function KioskScreen() {
                         </View>
                         <Text style={styles.modalTitle}>Searching...</Text>
                         <Text style={styles.modalMessage}>Please wait while we verify your identity...</Text>
+                        <Text style={styles.timerText}>{verificationTime}s</Text>
                     </>
                 );
             case 'unlocking':
@@ -249,8 +320,23 @@ export default function KioskScreen() {
                             <ActivityIndicator size="large" color="#4CAF50" />
                         </View>
                         <Text style={styles.modalTitle}>Face Recognized!</Text>
+                        {verificationResult?.member?.photo_url && (
+                            <Image
+                                source={{ uri: verificationResult.member.photo_url }}
+                                style={styles.memberPhoto}
+                                resizeMode="cover"
+                            />
+                        )}
                         <Text style={[styles.modalMessage, { color: '#4CAF50' }]}>
                             Welcome, {verificationResult?.member?.name}!
+                        </Text>
+                        {verificationResult?.member?.code && (
+                            <Text style={styles.memberCode}>
+                                Member ID: {verificationResult.member.code}
+                            </Text>
+                        )}
+                        <Text style={styles.verificationTimeText}>
+                            Verified in {verificationTime}s
                         </Text>
                         <Text style={styles.modalDetail}>Please wait for door to open...</Text>
                     </>
@@ -262,8 +348,23 @@ export default function KioskScreen() {
                             <Text style={styles.hugeIcon}>✅</Text>
                         </View>
                         <Text style={[styles.modalTitle, { color: '#4CAF50' }]}>Door is Open</Text>
+                        {verificationResult?.member?.photo_url && (
+                            <Image
+                                source={{ uri: verificationResult.member.photo_url }}
+                                style={styles.memberPhoto}
+                                resizeMode="cover"
+                            />
+                        )}
                         <Text style={[styles.modalMessage, { color: '#4CAF50' }]}>
                             Welcome, {verificationResult?.member?.name}!
+                        </Text>
+                        {verificationResult?.member?.code && (
+                            <Text style={styles.memberCode}>
+                                Member ID: {verificationResult.member.code}
+                            </Text>
+                        )}
+                        <Text style={styles.verificationTimeText}>
+                            Verified in {verificationTime}s
                         </Text>
                         <Text style={styles.modalDetail}>You may now enter the gym.</Text>
                         <Text style={styles.modalDetail}>Have a great workout!</Text>
@@ -599,5 +700,35 @@ const styles = StyleSheet.create({
         color: '#666',
         textAlign: 'center',
         fontStyle: 'italic',
+    },
+    memberPhoto: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        marginVertical: 16,
+        borderWidth: 3,
+        borderColor: '#4CAF50',
+    },
+    memberCode: {
+        fontSize: 14,
+        color: '#888',
+        fontWeight: '600',
+        marginTop: 4,
+        marginBottom: 8,
+    },
+    timerText: {
+        fontSize: 18,
+        color: '#4CAF50',
+        fontWeight: 'bold',
+        marginTop: 12,
+        textAlign: 'center',
+    },
+    verificationTimeText: {
+        fontSize: 14,
+        color: '#4CAF50',
+        fontWeight: '600',
+        marginTop: 8,
+        marginBottom: 4,
+        textAlign: 'center',
     },
 });

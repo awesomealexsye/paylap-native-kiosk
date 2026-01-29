@@ -4,6 +4,7 @@
 
 import { getPythonUrl, config } from '../constants/config';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 interface MemberInfo {
     id: number;
@@ -27,6 +28,31 @@ interface VerificationResult {
 
 class FaceVerificationService {
     /**
+     * Resize and compress image for optimal upload speed
+     * Recommended: 640x480 or 800x600 is sufficient for face recognition
+     */
+    private async optimizeImage(uri: string): Promise<string> {
+        try {
+            const { maxWidth, maxHeight, quality } = config.imageOptimization;
+            const optimizeStartTime = Date.now();
+
+            const manipulatedImage = await ImageManipulator.manipulateAsync(
+                uri,
+                [{ resize: { width: maxWidth } }],
+                { compress: quality, format: ImageManipulator.SaveFormat.JPEG }
+            );
+
+            const optimizeDuration = Date.now() - optimizeStartTime;
+
+            return manipulatedImage.uri;
+        } catch (error) {
+            console.error('❌ Error optimizing image:', error);
+            console.warn('⚠️  Falling back to original image');
+            return uri; // Fallback to original if optimization fails
+        }
+    }
+
+    /**
      * Convert image URI to base64
      */
     private async imageToBase64(uri: string): Promise<string> {
@@ -44,16 +70,48 @@ class FaceVerificationService {
 
     /**
      * Verify face from image
+     * Image optimization is controlled by config.imageOptimization.enabled
      */
     async verifyFace(imageUri: string, gymId: number, token: string): Promise<VerificationResult> {
+        const serviceStartTime = Date.now();
+        const optimize = config.imageOptimization.enabled;
+
         try {
             const url = getPythonUrl(config.python.verifyFaceEndpoint);
 
-            console.log('📸 Face Verification API call:', url);
+            let processedImageUri = imageUri;
+            let optimizeDuration = 0;
 
-            // Convert image to base64
-            const base64Image = await this.imageToBase64(imageUri);
-            console.log('✅ Image converted to base64, length:', base64Image.length);
+            // Step 0: Optimize image (if enabled)
+            if (optimize) {
+                const optimizeStartTime = Date.now();
+
+                processedImageUri = await this.optimizeImage(imageUri);
+
+                optimizeDuration = Date.now() - optimizeStartTime;
+            }
+
+            // Step 1: Convert image to base64
+            const base64StartTime = Date.now();
+
+            const base64Image = await this.imageToBase64(processedImageUri);
+
+            const base64EndTime = Date.now();
+            const base64Duration = base64EndTime - base64StartTime;
+            const base64SizeKB = (base64Image.length / 1024).toFixed(2);
+            const base64SizeMB = (base64Image.length / (1024 * 1024)).toFixed(2);
+
+
+            // Step 2: Send API request
+            const apiRequestStartTime = Date.now();
+
+            const requestBody = JSON.stringify({
+                image: base64Image,
+                gym_id: gymId,
+            });
+
+            const payloadSizeKB = (requestBody.length / 1024).toFixed(2);
+            const payloadSizeMB = (requestBody.length / (1024 * 1024)).toFixed(2);
 
             const response = await fetch(url, {
                 method: 'POST',
@@ -61,27 +119,30 @@ class FaceVerificationService {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`,
                 },
-                body: JSON.stringify({
-                    image: base64Image,
-                    gym_id: gymId,
-                }),
+                body: requestBody,
             });
 
-            console.log('📡 Response status:', url, {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-            }, {
-                image: "",
-                gym_id: gymId,
-            }, response.status);
+            const apiRequestEndTime = Date.now();
+            const apiRequestDuration = apiRequestEndTime - apiRequestStartTime;
+
+            // Calculate upload speed
+            const uploadSpeedKBps = (requestBody.length / 1024) / (apiRequestDuration / 1000);
+            const uploadSpeedMBps = uploadSpeedKBps / 1024;
+
+            // Step 3: Parse response
+            const parseStartTime = Date.now();
 
             const responseText = await response.text();
-            console.log('📥 Response text (first 500 chars):', responseText.substring(0, 500));
+
+            const parseEndTime = Date.now();
+            const parseDuration = parseEndTime - parseStartTime;
 
             let data: VerificationResult;
             try {
+                const jsonParseStartTime = Date.now();
                 data = JSON.parse(responseText);
-                console.log('📥 Parsed Verification response:', data);
+                const jsonParseDuration = Date.now() - jsonParseStartTime;
+
             } catch (parseError) {
                 console.error('❌ JSON Parse Error:', parseError);
                 console.error('📄 Full response text:', responseText);
@@ -98,8 +159,18 @@ class FaceVerificationService {
                 };
             }
 
+            // Total service time
+            const serviceEndTime = Date.now();
+            const totalServiceDuration = serviceEndTime - serviceStartTime;
+
+           
+            console.log('============================================\n');
+
             return data;
         } catch (error) {
+            const serviceEndTime = Date.now();
+            const totalServiceDuration = serviceEndTime - serviceStartTime;
+
             console.error('❌ Face verification error:', error);
             return {
                 success: false,

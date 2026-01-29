@@ -44,8 +44,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 token,
                 selectedGym,
             });
-
-            console.log('✅ Auth state loaded:', { isAuthenticated: !!(token && user), user, selectedGym });
         } catch (error) {
             console.error('❌ Error loading auth state:', error);
             setAuthState({
