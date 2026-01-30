@@ -2,7 +2,7 @@
   "expo": {
     "name": "Paylap Fitness Kiosk",
     "slug": "paylap-fitness-kiosk",
-    "version": "1.0.0",
+    "version": "2.0.1",
     "orientation": "portrait",
     "scheme": "gymkiosk",
     "icon": "./assets/icon.png",
@@ -13,7 +13,8 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.paylapfitness.kiosk"
+      "bundleIdentifier": "com.paylapfitness.kiosk",
+      "buildNumber": "3"
     },
     "android": {
       "adaptiveIcon": {
@@ -21,6 +22,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.paylapfitness.kiosk",
+      "versionCode": 3,
       "permissions": [
         "CAMERA",
         "INTERNET",

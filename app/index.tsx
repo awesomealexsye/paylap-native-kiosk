@@ -360,7 +360,7 @@ export default function KioskScreen() {
                         <View style={[styles.scannerCircle, { borderColor: '#4CAF50' }]}>
                             <Text style={styles.hugeIcon}>✅</Text>
                         </View>
-                        <Text style={[styles.modalTitle, { color: '#4CAF50' }]}>Door is Open</Text>
+                        <Text style={[styles.modalTitle, { color: '#4CAF50' }]}>Attendance marked successfully</Text>
                         {verificationResult?.member?.photo_url && (
                             <Image
                                 source={{ uri: verificationResult.member.photo_url }}
