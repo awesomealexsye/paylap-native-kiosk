@@ -6,10 +6,10 @@ import {
     StyleSheet,
     ActivityIndicator,
     Modal,
-    Dimensions,
     Image,
     BackHandler,
     Alert,
+    useWindowDimensions,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,11 +23,10 @@ import { GymSelectionModal } from '../components/GymSelectionModal';
 import { KIOSK_CONFIG } from '../constants/config';
 import { useKioskSettings } from '../contexts/KioskSettingsContext';
 
-const { width } = Dimensions.get('window');
-
 type ModalState = 'idle' | 'scanning' | 'unlocking' | 'success' | 'error';
 
 export default function KioskScreen() {
+    const { width, height } = useWindowDimensions();
     const { isLoading: authLoading, isAuthenticated, selectedGym, token } = useAuth();
     const { isRelayEnabled, isLoading: settingsLoading } = useKioskSettings();
     const [permission, requestPermission] = useCameraPermissions();
@@ -103,7 +102,7 @@ export default function KioskScreen() {
         };
     }, [modalState]);
 
-    if (!permission) return <View />;
+    if (!permission) return <View style={styles.container} />;
 
     if (!permission.granted) {
         return (
@@ -128,6 +127,9 @@ export default function KioskScreen() {
             </SafeAreaView>
         );
     }
+
+    const faceGuideWidth = Math.min(width, height) * 0.65;
+    const faceGuideHeight = Math.min(width, height) * 0.8;
 
     const unlockDoorWithRetry = async (maxAttempts = 3): Promise<{ success: boolean; error?: string }> => {
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -402,9 +404,40 @@ export default function KioskScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
-                <View style={styles.headerTop}>
+        <View style={styles.container}>
+            {/* Full screen camera or captured image */}
+            {capturedImageUri ? (
+                <Image
+                    source={{ uri: capturedImageUri }}
+                    style={StyleSheet.absoluteFill}
+                    resizeMode="cover"
+                />
+            ) : (
+                <CameraView
+                    ref={cameraRef}
+                    style={StyleSheet.absoluteFill}
+                    facing="front"
+                />
+            )}
+
+            {/* Face guide overlay */}
+            <View style={styles.faceOverlay} pointerEvents="none">
+                <View style={[
+                    styles.faceGuide,
+                    {
+                        width: faceGuideWidth,
+                        height: faceGuideHeight,
+                        borderColor: capturedImageUri
+                            ? 'rgba(76, 175, 80, 0.6)'
+                            : 'rgba(255, 255, 255, 0.4)',
+                    }
+                ]} />
+            </View>
+
+            {/* SafeAreaView overlay for all UI */}
+            <SafeAreaView style={styles.overlay}>
+                {/* Top row: gym name + icons */}
+                <View style={styles.topRow}>
                     <TouchableOpacity
                         activeOpacity={1}
                         onLongPress={() => {
@@ -413,13 +446,11 @@ export default function KioskScreen() {
                             }
                         }}
                         delayLongPress={KIOSK_CONFIG.longPressDuration}
+                        style={styles.gymNameWrapper}
                     >
-                        <View>
-                            <Text style={styles.title}>Face Check-In</Text>
-                            {selectedGym && (
-                                <Text style={styles.gymName}>📍 {selectedGym.name}</Text>
-                            )}
-                        </View>
+                        {selectedGym && (
+                            <Text style={styles.gymName} numberOfLines={1}>📍 {selectedGym.name}</Text>
+                        )}
                     </TouchableOpacity>
                     <View style={styles.headerButtons}>
                         <TouchableOpacity
@@ -438,64 +469,33 @@ export default function KioskScreen() {
                         </TouchableOpacity>
                     </View>
                 </View>
-                <Text style={styles.subtitle}>Position your face in the camera frame</Text>
-            </View>
 
-            <View style={styles.cameraFrame}>
-                <View style={styles.cameraContainer}>
+                {/* Spacer - pushes button to bottom */}
+                <View style={{ flex: 1 }} />
+
+                {/* Bottom button overlaid on camera */}
+                <View style={styles.footer}>
                     {capturedImageUri ? (
-                        // Show captured image instead of camera
-                        <>
-                            <Image
-                                source={{ uri: capturedImageUri }}
-                                style={styles.capturedImage}
-                                resizeMode="cover"
-                            />
-                            <View style={styles.faceOverlay}>
-                                <View style={[styles.faceGuide, { borderColor: 'rgba(76, 175, 80, 0.6)' }]} />
-                            </View>
-                        </>
+                        <TouchableOpacity
+                            style={[styles.captureButton, styles.captureAgainButton]}
+                            onPress={handleCaptureAgain}
+                            disabled={modalState !== 'idle' && modalState !== 'scanning'}
+                        >
+                            <Text style={styles.captureButtonText}>📷 Capture Again</Text>
+                        </TouchableOpacity>
                     ) : (
-                        // Show live camera feed
-                        <>
-                            <CameraView
-                                ref={cameraRef}
-                                style={styles.camera}
-                                facing="front"
-                            />
-                            <View style={styles.faceOverlay}>
-                                <View style={styles.faceGuide} />
-                            </View>
-                        </>
+                        <TouchableOpacity
+                            style={styles.captureButton}
+                            onPress={handleCaptureFace}
+                            disabled={modalState !== 'idle'}
+                        >
+                            <Text style={styles.captureButtonText}>
+                                {modalState === 'idle' ? 'Scan My Face' : 'Checking...'}
+                            </Text>
+                        </TouchableOpacity>
                     )}
                 </View>
-            </View>
-
-            <View style={styles.footer}>
-                {capturedImageUri ? (
-                    // Show "Capture Again" button when image is captured
-                    <TouchableOpacity
-                        style={[styles.captureButton, styles.captureAgainButton]}
-                        onPress={handleCaptureAgain}
-                        disabled={modalState !== 'idle' && modalState !== 'scanning'}
-                    >
-                        <Text style={styles.captureButtonText}>📷 Capture Again</Text>
-                    </TouchableOpacity>
-                ) : (
-                    // Show "Scan My Face" button when showing live camera
-                    <TouchableOpacity
-                        style={styles.captureButton}
-                        onPress={handleCaptureFace}
-                        disabled={modalState !== 'idle'}
-                    >
-                        <Text style={styles.captureButtonText}>
-                            {modalState === 'idle' ? 'Scan My Face' : 'Checking...'}
-                        </Text>
-                    </TouchableOpacity>
-                )}
-            </View>
-
-
+            </SafeAreaView>
 
             {/* Unified Verification Modal */}
             <Modal
@@ -532,7 +532,7 @@ export default function KioskScreen() {
             <GymSelectionModal
                 visible={showGymSelection}
             />
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -551,63 +551,44 @@ const styles = StyleSheet.create({
         fontSize: 16,
         marginTop: 16,
     },
-    header: {
-        padding: 24,
+    // Full-screen overlay that sits on top of the camera
+    overlay: {
+        flex: 1,
     },
-    headerTop: {
+    topRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: 8,
-    },
-    actionButton: {
-        width: 48,
-        height: 48,
-        backgroundColor: '#1f1f1f',
-        borderRadius: 24,
-        justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#333',
+        paddingHorizontal: 20,
+        paddingTop: 12,
+        paddingBottom: 8,
+        backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    },
+    gymNameWrapper: {
+        flex: 1,
+        marginRight: 12,
+    },
+    gymName: {
+        fontSize: 16,
+        color: '#4CAF50',
+        fontWeight: '700',
     },
     headerButtons: {
         flexDirection: 'row',
-        gap: 12,
+        gap: 10,
+    },
+    actionButton: {
+        width: 44,
+        height: 44,
+        backgroundColor: 'rgba(31, 31, 31, 0.8)',
+        borderRadius: 22,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.15)',
     },
     actionButtonIcon: {
-        fontSize: 22,
-    },
-    title: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#fff',
-        letterSpacing: 0.5,
-    },
-    gymName: {
-        fontSize: 14,
-        color: '#4CAF50',
-        fontWeight: '600',
-        marginTop: 4,
-    },
-    subtitle: {
-        fontSize: 15,
-        color: '#888',
-        marginTop: 4,
-    },
-    cameraFrame: {
-        flex: 1,
-        paddingHorizontal: 24,
-    },
-    cameraContainer: {
-        flex: 1,
-        borderRadius: 30,
-        overflow: 'hidden',
-        backgroundColor: '#1a1a1a',
-        borderWidth: 2,
-        borderColor: '#333',
-    },
-    camera: {
-        flex: 1,
+        fontSize: 20,
     },
     faceOverlay: {
         ...StyleSheet.absoluteFillObject,
@@ -615,15 +596,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     faceGuide: {
-        width: width * 0.75, // Increased width from 0.6
-        height: width * 0.9, // Increased height from 0.8
-        borderRadius: 30,    // Made it more of a rounded rectangle than an oval
-        borderWidth: 3,     // Slightly thicker line
-        borderColor: 'rgba(255, 255, 255, 0.4)',
+        borderRadius: 30,
+        borderWidth: 3,
         borderStyle: 'dashed',
     },
     footer: {
-        padding: 24,
+        paddingHorizontal: 24,
+        paddingBottom: 16,
     },
     button: {
         backgroundColor: '#4CAF50',
@@ -639,13 +618,13 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     captureButton: {
-        backgroundColor: '#4CAF50',
+        backgroundColor: 'rgba(76, 175, 80, 0.92)',
         paddingVertical: 20,
         borderRadius: 16,
         alignItems: 'center',
         shadowColor: '#4CAF50',
         shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.3,
+        shadowOpacity: 0.4,
         shadowRadius: 10,
         elevation: 10,
     },
@@ -656,13 +635,8 @@ const styles = StyleSheet.create({
         letterSpacing: 1,
     },
     captureAgainButton: {
-        backgroundColor: '#FF9800', // Orange color for "Capture Again"
+        backgroundColor: 'rgba(255, 152, 0, 0.92)',
         shadowColor: '#FF9800',
-    },
-    capturedImage: {
-        flex: 1,
-        width: '100%',
-        height: '100%',
     },
     // Modal Styles
     modalOverlay: {

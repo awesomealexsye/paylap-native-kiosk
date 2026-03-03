@@ -1,9 +1,9 @@
 {
   "expo": {
     "name": "Paylap Fitness Kiosk",
-    "slug": "paylap-fitness-kiosk",
-    "version": "2.0.1",
-    "orientation": "portrait",
+    "slug": "paylapfitness",
+    "version": "2.0.3",
+    "orientation": "default",
     "scheme": "gymkiosk",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -11,10 +11,19 @@
     "assetBundlePatterns": [
       "**/*"
     ],
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.paylapfitness.kiosk",
-      "buildNumber": "3"
+      "buildNumber": "5",
+      "runtimeVersion": "2.0.3",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to access your camera for face verification."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -22,21 +31,38 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.paylapfitness.kiosk",
-      "versionCode": 3,
+      "versionCode": 11,
+      "runtimeVersion": "2.0.3",
       "permissions": [
         "CAMERA",
         "INTERNET",
         "ACCESS_NETWORK_STATE"
       ]
     },
+    "updates": {
+      "url": "https://u.expo.dev/7d4b2f89-68bb-4282-b941-8e0866f78668"
+    },
     "plugins": [
       "expo-router",
+      "expo-updates",
       [
         "expo-camera",
         {
           "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera for face verification."
         }
+      ],
+      [
+        "expo-file-system",
+        {
+          "filePermission": "Allow $(PRODUCT_NAME) to access files for face verification and temporary image processing."
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "7d4b2f89-68bb-4282-b941-8e0866f78668"
+      }
+    },
+    "owner": "dhannipaydigital"
   }
 }
