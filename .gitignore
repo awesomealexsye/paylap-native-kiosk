@@ -40,4 +40,4 @@ yarn-error.*
 /ios
 /android
 
-keystore/google-service-account.json
+keystore/google-service-account.jsonkeystore/
